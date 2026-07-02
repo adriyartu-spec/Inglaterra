@@ -16,6 +16,7 @@ import OfertaAcademicaSection from "@/components/OfertaAcademicaSection";
 import HistoriaSection from "@/components/HistoriaSection";
 import VidaEstudiantilSection from "@/components/VidaEstudiantilSection";
 import GaleriaSection from "@/components/GaleriaSection"; // ← NUEVO Fase 1
+import ComunicadosSection from "@/components/ComunicadosSection";
 import JuntaSection from "@/components/JuntaSection";
 import CalendarioSection from "@/components/CalendarioSection";
 import NoticiasSection from "@/components/NoticiasSection";
@@ -35,6 +36,7 @@ export default function Home() {
       <GaleriaSection />      {/* ← NUEVO Fase 1 */}
       <JuntaSection />
       <CalendarioSection />
+      <ComunicadosSection />
       <NoticiasSection />
       <GreenJoySection />
       <ContactoSection />
