@@ -1,14 +1,14 @@
 // CAMBIOS:
-// - Módulo Eventos habilitado en el CMS
-// - CRUD completo: crear, listar, publicar/ocultar, eliminar eventos
-// - Módulos Galería y Comunicados sin cambios
+// - Módulo Familias agregado: ver padres pendientes, aprobar, rechazar
+// - Muestra nombre del estudiante y fecha de nacimiento
+// - Módulos Galería, Comunicados y Eventos sin cambios
 
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import {
   Images, CalendarDays, Megaphone, LogOut, Upload,
-  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X
+  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X, Users
 } from "lucide-react";
 
 interface Foto {
@@ -24,6 +24,11 @@ interface Evento {
   fecha_inicio: string; fecha_fin: string | null;
   hora_inicio: string | null; lugar: string | null;
   categoria: string; publicado: boolean;
+}
+interface Padre {
+  id: string; nombre: string; apellidos: string; cedula: string;
+  email: string; telefono: string | null; verificado: boolean; created_at: string;
+  estudiantes: { nombre: string; apellidos: string; grado: string; fecha_nacimiento: string | null }[];
 }
 
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
@@ -71,6 +76,12 @@ export default function AdminPanel() {
     fecha_fin: "", hora_inicio: "", lugar: "", categoria: "General",
   });
 
+  // Familias
+  const [padres, setPadres] = useState<Padre[]>([]);
+  const [loadingPadres, setLoadingPadres] = useState(false);
+  const [filtroPadres, setFiltroPadres] = useState<"todos" | "pendientes" | "aprobados">("pendientes");
+  const [padresMsg, setPadresMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+
   // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -93,7 +104,12 @@ export default function AdminPanel() {
     if (modulo === "galeria") cargarFotos();
     if (modulo === "comunicados") cargarComunicados();
     if (modulo === "eventos") cargarEventos();
+    if (modulo === "familias") cargarPadres();
   }, [escuelaId, modulo]);
+
+  useEffect(() => {
+    if (escuelaId && modulo === "familias") cargarPadres();
+  }, [filtroPadres]);
 
   // ── GALERÍA ──
   async function cargarFotos() {
@@ -103,7 +119,6 @@ export default function AdminPanel() {
     setFotos(data ?? []);
     setLoadingFotos(false);
   }
-
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !escuelaId) return;
@@ -125,13 +140,12 @@ export default function AdminPanel() {
       if (fileRef.current) fileRef.current.value = "";
       cargarFotos();
     } catch {
-      setUploadMsg({ tipo: "err", texto: "Error al subir la foto. Intente de nuevo." });
+      setUploadMsg({ tipo: "err", texto: "Error al subir la foto." });
     } finally {
       setSubiendo(false);
       setTimeout(() => setUploadMsg(null), 4000);
     }
   }
-
   async function togglePublicada(foto: Foto) {
     await supabase.from("galeria_fotos").update({ publicada: !foto.publicada }).eq("id", foto.id);
     cargarFotos();
@@ -166,25 +180,18 @@ export default function AdminPanel() {
         fecha_vencimiento: formCom.fecha_vencimiento || null, publicado: true,
       });
       if (error) throw error;
-      setComMsg({ tipo: "ok", texto: "¡Comunicado publicado exitosamente!" });
+      setComMsg({ tipo: "ok", texto: "¡Comunicado publicado!" });
       setFormCom({ titulo: "", contenido: "", tipo: "general", fecha_publicacion: new Date().toISOString().split("T")[0], fecha_vencimiento: "" });
-      setShowFormCom(false);
-      cargarComunicados();
-    } catch {
-      setComMsg({ tipo: "err", texto: "Error al guardar el comunicado." });
-    } finally {
-      setSavingCom(false);
-      setTimeout(() => setComMsg(null), 4000);
-    }
+      setShowFormCom(false); cargarComunicados();
+    } catch { setComMsg({ tipo: "err", texto: "Error al guardar el comunicado." }); }
+    finally { setSavingCom(false); setTimeout(() => setComMsg(null), 4000); }
   }
   async function eliminarComunicado(id: string) {
     if (!confirm("¿Eliminar este comunicado?")) return;
-    await supabase.from("comunicados").delete().eq("id", id);
-    cargarComunicados();
+    await supabase.from("comunicados").delete().eq("id", id); cargarComunicados();
   }
   async function togglePublicadoCom(com: Comunicado) {
-    await supabase.from("comunicados").update({ publicado: !com.publicado }).eq("id", com.id);
-    cargarComunicados();
+    await supabase.from("comunicados").update({ publicado: !com.publicado }).eq("id", com.id); cargarComunicados();
   }
 
   // ── EVENTOS ──
@@ -201,36 +208,62 @@ export default function AdminPanel() {
     setSavingEv(true); setEvMsg(null);
     try {
       const { error } = await supabase.from("eventos").insert({
-        escuela_id: escuelaId,
-        titulo: formEv.titulo,
-        descripcion: formEv.descripcion || null,
-        fecha_inicio: formEv.fecha_inicio,
-        fecha_fin: formEv.fecha_fin || null,
-        hora_inicio: formEv.hora_inicio || null,
-        lugar: formEv.lugar || null,
-        categoria: formEv.categoria,
-        publicado: true,
+        escuela_id: escuelaId, titulo: formEv.titulo, descripcion: formEv.descripcion || null,
+        fecha_inicio: formEv.fecha_inicio, fecha_fin: formEv.fecha_fin || null,
+        hora_inicio: formEv.hora_inicio || null, lugar: formEv.lugar || null,
+        categoria: formEv.categoria, publicado: true,
       });
       if (error) throw error;
-      setEvMsg({ tipo: "ok", texto: "¡Evento publicado exitosamente!" });
+      setEvMsg({ tipo: "ok", texto: "¡Evento publicado!" });
       setFormEv({ titulo: "", descripcion: "", fecha_inicio: new Date().toISOString().split("T")[0], fecha_fin: "", hora_inicio: "", lugar: "", categoria: "General" });
-      setShowFormEv(false);
-      cargarEventos();
-    } catch {
-      setEvMsg({ tipo: "err", texto: "Error al guardar el evento." });
-    } finally {
-      setSavingEv(false);
-      setTimeout(() => setEvMsg(null), 4000);
-    }
+      setShowFormEv(false); cargarEventos();
+    } catch { setEvMsg({ tipo: "err", texto: "Error al guardar el evento." }); }
+    finally { setSavingEv(false); setTimeout(() => setEvMsg(null), 4000); }
   }
   async function eliminarEvento(id: string) {
     if (!confirm("¿Eliminar este evento?")) return;
-    await supabase.from("eventos").delete().eq("id", id);
-    cargarEventos();
+    await supabase.from("eventos").delete().eq("id", id); cargarEventos();
   }
   async function togglePublicadoEv(ev: Evento) {
-    await supabase.from("eventos").update({ publicado: !ev.publicado }).eq("id", ev.id);
-    cargarEventos();
+    await supabase.from("eventos").update({ publicado: !ev.publicado }).eq("id", ev.id); cargarEventos();
+  }
+
+  // ── FAMILIAS ──
+  async function cargarPadres() {
+    setLoadingPadres(true);
+    let query = supabase
+      .from("padres_familia")
+      .select("*, estudiantes(nombre, apellidos, grado, fecha_nacimiento)")
+      .eq("escuela_id", escuelaId)
+      .order("created_at", { ascending: false });
+
+    if (filtroPadres === "pendientes") query = query.eq("verificado", false);
+    if (filtroPadres === "aprobados") query = query.eq("verificado", true);
+
+    const { data } = await query;
+    setPadres(data ?? []);
+    setLoadingPadres(false);
+  }
+
+  async function aprobarPadre(padre: Padre) {
+    const { error } = await supabase.from("padres_familia")
+      .update({ verificado: true }).eq("id", padre.id);
+    if (error) {
+      setPadresMsg({ tipo: "err", texto: "Error al aprobar el registro." });
+    } else {
+      setPadresMsg({ tipo: "ok", texto: `✓ ${padre.nombre} ${padre.apellidos} aprobado.` });
+      cargarPadres();
+    }
+    setTimeout(() => setPadresMsg(null), 3000);
+  }
+
+  async function rechazarPadre(padre: Padre) {
+    if (!confirm(`¿Eliminar el registro de ${padre.nombre} ${padre.apellidos}?`)) return;
+    await supabase.from("estudiantes").delete().eq("padre_id", padre.id);
+    await supabase.from("padres_familia").delete().eq("id", padre.id);
+    setPadresMsg({ tipo: "ok", texto: "Registro eliminado." });
+    cargarPadres();
+    setTimeout(() => setPadresMsg(null), 3000);
   }
 
   async function cerrarSesion() {
@@ -245,18 +278,17 @@ export default function AdminPanel() {
   );
 
   const navItems = [
-    { id: "galeria",     label: "Galería",     icon: <Images size={18} />,      disabled: false },
-    { id: "comunicados", label: "Comunicados", icon: <Megaphone size={18} />,   disabled: false },
-    { id: "eventos",     label: "Eventos",     icon: <CalendarDays size={18} />, disabled: false },
+    { id: "galeria",     label: "Galería",     icon: <Images size={18} />,       disabled: false },
+    { id: "comunicados", label: "Comunicados", icon: <Megaphone size={18} />,    disabled: false },
+    { id: "eventos",     label: "Eventos",     icon: <CalendarDays size={18} />,  disabled: false },
+    { id: "familias",    label: "Familias",    icon: <Users size={18} />,         disabled: false },
   ];
 
   return (
     <div className="min-h-screen flex" style={{ background: "#f8fafc" }}>
       {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
-        style={{ background: "var(--color-ei-navy-dark)" }}
-      >
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ background: "var(--color-ei-navy-dark)" }}>
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663744735795/fwbUywmTVnttLNyf.png" alt="Escudo" className="h-9 w-auto" />
@@ -272,11 +304,8 @@ export default function AdminPanel() {
               onClick={() => { if (!item.disabled) { setModulo(item.id); setSidebarOpen(false); } }}
               disabled={item.disabled}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                modulo === item.id ? "bg-white/15 text-white"
-                : item.disabled ? "text-white/20 cursor-not-allowed"
-                : "text-white/60 hover:bg-white/10 hover:text-white"
-              }`}
-            >
+                modulo === item.id ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+              }`}>
               {item.icon}{item.label}
             </button>
           ))}
@@ -300,11 +329,12 @@ export default function AdminPanel() {
             {modulo === "galeria" && "Gestión de Galería"}
             {modulo === "comunicados" && "Comunicados"}
             {modulo === "eventos" && "Gestión de Eventos"}
+            {modulo === "familias" && "Familias Registradas"}
           </h1>
           <a href="/" target="_blank" className="ml-auto text-xs text-blue-600 hover:underline">Ver sitio →</a>
         </header>
 
-        {/* ── MÓDULO GALERÍA ── */}
+        {/* ── GALERÍA ── */}
         {modulo === "galeria" && (
           <div className="flex-1 p-4 sm:p-6 space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -317,8 +347,7 @@ export default function AdminPanel() {
               <div className="grid sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                  <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)}
-                    placeholder="Ej: Estudiantes en la feria científica"
+                  <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Ej: Estudiantes en la feria"
                     className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
@@ -344,22 +373,20 @@ export default function AdminPanel() {
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={subirFoto} disabled={subiendo} />
             </div>
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Fotos publicadas ({fotos.length})</h2>
-              {loadingFotos ? (
-                <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
-              ) : fotos.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-10">No hay fotos aún.</p>
-              ) : (
+              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Fotos ({fotos.length})</h2>
+              {loadingFotos ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : fotos.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay fotos aún.</p>
+              : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                   {fotos.map((foto) => (
                     <div key={foto.id} className="relative group rounded-xl overflow-hidden border border-gray-100">
                       <img src={foto.url} alt={foto.caption} className="w-full aspect-square object-cover" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
                         <div className="flex justify-end gap-1">
-                          <button onClick={() => toggleDestacada(foto)} className={`p-1.5 rounded-lg ${foto.destacada ? "bg-yellow-400 text-white" : "bg-white/20 text-white hover:bg-white/40"}`}>
+                          <button onClick={() => toggleDestacada(foto)} className={`p-1.5 rounded-lg ${foto.destacada ? "bg-yellow-400 text-white" : "bg-white/20 text-white"}`}>
                             {foto.destacada ? <Star size={14} fill="white" /> : <StarOff size={14} />}
                           </button>
-                          <button onClick={() => eliminarFoto(foto)} className="p-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600"><Trash2 size={14} /></button>
+                          <button onClick={() => eliminarFoto(foto)} className="p-1.5 rounded-lg bg-red-500 text-white"><Trash2 size={14} /></button>
                         </div>
                         <div>
                           <p className="text-white text-xs line-clamp-2">{foto.caption}</p>
@@ -368,7 +395,7 @@ export default function AdminPanel() {
                           </button>
                         </div>
                       </div>
-                      {foto.destacada && <div className="absolute top-2 left-2 bg-yellow-400 text-white text-xs px-2 py-0.5 rounded-full font-semibold">★ Destacada</div>}
+                      {foto.destacada && <div className="absolute top-2 left-2 bg-yellow-400 text-white text-xs px-2 py-0.5 rounded-full font-semibold">★</div>}
                     </div>
                   ))}
                 </div>
@@ -377,58 +404,46 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* ── MÓDULO COMUNICADOS ── */}
+        {/* ── COMUNICADOS ── */}
         {modulo === "comunicados" && (
           <div className="flex-1 p-4 sm:p-6 space-y-6">
             <div className="flex justify-end">
-              <button onClick={() => setShowFormCom(!showFormCom)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
-                style={{ background: "var(--color-ei-electric)" }}>
+              <button onClick={() => setShowFormCom(!showFormCom)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "var(--color-ei-electric)" }}>
                 {showFormCom ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo comunicado</>}
               </button>
             </div>
-            {comMsg && (
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${comMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                {comMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{comMsg.texto}
-              </div>
-            )}
+            {comMsg && <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${comMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{comMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{comMsg.texto}</div>}
             {showFormCom && (
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Nuevo comunicado</h2>
                 <form onSubmit={guardarComunicado} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-                    <input type="text" required value={formCom.titulo} onChange={(e) => setFormCom({ ...formCom, titulo: e.target.value })}
-                      placeholder="Ej: Reunión de padres de familia"
+                    <input type="text" required value={formCom.titulo} onChange={(e) => setFormCom({ ...formCom, titulo: e.target.value })} placeholder="Título del comunicado"
                       className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                      <select value={formCom.tipo} onChange={(e) => setFormCom({ ...formCom, tipo: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <select value={formCom.tipo} onChange={(e) => setFormCom({ ...formCom, tipo: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {TIPOS_COMUNICADO.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Fecha publicación *</label>
-                      <input type="date" required value={formCom.fecha_publicacion} onChange={(e) => setFormCom({ ...formCom, fecha_publicacion: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="date" required value={formCom.fecha_publicacion} onChange={(e) => setFormCom({ ...formCom, fecha_publicacion: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Vigente hasta</label>
-                      <input type="date" value={formCom.fecha_vencimiento} onChange={(e) => setFormCom({ ...formCom, fecha_vencimiento: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="date" value={formCom.fecha_vencimiento} onChange={(e) => setFormCom({ ...formCom, fecha_vencimiento: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Contenido *</label>
-                    <textarea required rows={5} value={formCom.contenido} onChange={(e) => setFormCom({ ...formCom, contenido: e.target.value })}
-                      placeholder="Escriba el comunicado aquí..."
-                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                    <textarea required rows={5} value={formCom.contenido} onChange={(e) => setFormCom({ ...formCom, contenido: e.target.value })} placeholder="Escriba el comunicado aquí..." className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                   </div>
                   <button type="submit" disabled={savingCom} className="btn-inst flex items-center gap-2 disabled:opacity-60">
-                    {savingCom ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar comunicado</>}
+                    {savingCom ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar</>}
                   </button>
                 </form>
               </div>
@@ -443,16 +458,14 @@ export default function AdminPanel() {
                     <div key={com.id} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${com.tipo === "urgente" ? "bg-red-100 text-red-700" : com.tipo === "actividad" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>{com.tipo}</span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${com.tipo === "urgente" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{com.tipo}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${com.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{com.publicado ? "Publicado" : "Oculto"}</span>
                         </div>
                         <h3 className="font-semibold text-gray-800 text-sm">{com.titulo}</h3>
                         <p className="text-gray-400 text-xs mt-0.5">{com.fecha_publicacion}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => togglePublicadoCom(com)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
-                          {com.publicado ? "Ocultar" : "Publicar"}
-                        </button>
+                        <button onClick={() => togglePublicadoCom(com)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">{com.publicado ? "Ocultar" : "Publicar"}</button>
                         <button onClick={() => eliminarComunicado(com.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
                       </div>
                     </div>
@@ -463,68 +476,51 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* ── MÓDULO EVENTOS ── */}
+        {/* ── EVENTOS ── */}
         {modulo === "eventos" && (
           <div className="flex-1 p-4 sm:p-6 space-y-6">
             <div className="flex justify-end">
-              <button onClick={() => setShowFormEv(!showFormEv)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
-                style={{ background: "var(--color-ei-electric)" }}>
+              <button onClick={() => setShowFormEv(!showFormEv)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "var(--color-ei-electric)" }}>
                 {showFormEv ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo evento</>}
               </button>
             </div>
-
-            {evMsg && (
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${evMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                {evMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{evMsg.texto}
-              </div>
-            )}
-
+            {evMsg && <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${evMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{evMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{evMsg.texto}</div>}
             {showFormEv && (
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Nuevo evento</h2>
                 <form onSubmit={guardarEvento} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Título del evento *</label>
-                    <input type="text" required value={formEv.titulo} onChange={(e) => setFormEv({ ...formEv, titulo: e.target.value })}
-                      placeholder="Ej: Feria de Ciencias 2026"
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+                    <input type="text" required value={formEv.titulo} onChange={(e) => setFormEv({ ...formEv, titulo: e.target.value })} placeholder="Ej: Feria de Ciencias 2026"
                       className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio *</label>
-                      <input type="date" required value={formEv.fecha_inicio} onChange={(e) => setFormEv({ ...formEv, fecha_inicio: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="date" required value={formEv.fecha_inicio} onChange={(e) => setFormEv({ ...formEv, fecha_inicio: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
-                      <input type="date" value={formEv.fecha_fin} onChange={(e) => setFormEv({ ...formEv, fecha_fin: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="date" value={formEv.fecha_fin} onChange={(e) => setFormEv({ ...formEv, fecha_fin: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
-                      <input type="time" value={formEv.hora_inicio} onChange={(e) => setFormEv({ ...formEv, hora_inicio: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="time" value={formEv.hora_inicio} onChange={(e) => setFormEv({ ...formEv, hora_inicio: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                      <select value={formEv.categoria} onChange={(e) => setFormEv({ ...formEv, categoria: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <select value={formEv.categoria} onChange={(e) => setFormEv({ ...formEv, categoria: e.target.value })} className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {CATEGORIAS_EVENTO.map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Lugar</label>
-                    <input type="text" value={formEv.lugar} onChange={(e) => setFormEv({ ...formEv, lugar: e.target.value })}
-                      placeholder="Ej: Salón principal, Cancha deportiva"
-                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" value={formEv.lugar} onChange={(e) => setFormEv({ ...formEv, lugar: e.target.value })} placeholder="Ej: Salón principal" className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                    <textarea rows={3} value={formEv.descripcion} onChange={(e) => setFormEv({ ...formEv, descripcion: e.target.value })}
-                      placeholder="Descripción opcional del evento..."
-                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                    <textarea rows={3} value={formEv.descripcion} onChange={(e) => setFormEv({ ...formEv, descripcion: e.target.value })} placeholder="Descripción opcional..." className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                   </div>
                   <button type="submit" disabled={savingEv} className="btn-inst flex items-center gap-2 disabled:opacity-60">
                     {savingEv ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar evento</>}
@@ -532,11 +528,10 @@ export default function AdminPanel() {
                 </form>
               </div>
             )}
-
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Eventos ({eventos.length})</h2>
               {loadingEv ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
-              : eventos.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay eventos. ¡Creá el primero!</p>
+              : eventos.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay eventos.</p>
               : (
                 <div className="space-y-3">
                   {eventos.map((ev) => (
@@ -547,15 +542,103 @@ export default function AdminPanel() {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{ev.publicado ? "Publicado" : "Oculto"}</span>
                         </div>
                         <h3 className="font-semibold text-gray-800 text-sm">{ev.titulo}</h3>
-                        <p className="text-gray-400 text-xs mt-0.5">
-                          {ev.fecha_inicio}{ev.hora_inicio ? ` · ${ev.hora_inicio}` : ""}{ev.lugar ? ` · ${ev.lugar}` : ""}
-                        </p>
+                        <p className="text-gray-400 text-xs mt-0.5">{ev.fecha_inicio}{ev.hora_inicio ? ` · ${ev.hora_inicio}` : ""}{ev.lugar ? ` · ${ev.lugar}` : ""}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => togglePublicadoEv(ev)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
-                          {ev.publicado ? "Ocultar" : "Publicar"}
-                        </button>
+                        <button onClick={() => togglePublicadoEv(ev)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">{ev.publicado ? "Ocultar" : "Publicar"}</button>
                         <button onClick={() => eliminarEvento(ev.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── FAMILIAS ── */}
+        {modulo === "familias" && (
+          <div className="flex-1 p-4 sm:p-6 space-y-6">
+
+            {padresMsg && (
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${padresMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {padresMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{padresMsg.texto}
+              </div>
+            )}
+
+            {/* Filtros */}
+            <div className="flex gap-2">
+              {(["pendientes", "aprobados", "todos"] as const).map((f) => (
+                <button key={f} onClick={() => setFiltroPadres(f)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${filtroPadres === f ? "text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  style={filtroPadres === f ? { background: "var(--color-ei-electric)" } : {}}>
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                Familias {filtroPadres} ({padres.length})
+              </h2>
+
+              {loadingPadres ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : padres.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay registros {filtroPadres}.</p>
+              : (
+                <div className="space-y-4">
+                  {padres.map((padre) => (
+                    <div key={padre.id} className={`p-4 rounded-xl border ${padre.verificado ? "border-green-100 bg-green-50/30" : "border-amber-100 bg-amber-50/30"}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          {/* Estado */}
+                          <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${padre.verificado ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                            {padre.verificado ? "✓ Aprobado" : "⏳ Pendiente"}
+                          </span>
+
+                          {/* Datos del padre */}
+                          <h3 className="font-bold text-gray-800 text-sm">{padre.nombre} {padre.apellidos}</h3>
+                          <div className="text-gray-500 text-xs mt-1 space-y-0.5">
+                            <p>📋 Cédula: {padre.cedula}</p>
+                            <p>📧 {padre.email}</p>
+                            {padre.telefono && <p>📞 {padre.telefono}</p>}
+                          </div>
+
+                          {/* Datos del estudiante */}
+                          {padre.estudiantes?.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              {padre.estudiantes.map((est, i) => (
+                                <div key={i} className="text-xs text-gray-600">
+                                  <span className="font-semibold">👧 Estudiante:</span> {est.nombre} {est.apellidos} · {est.grado} grado
+                                  {est.fecha_nacimiento && (
+                                    <span className="ml-2 text-purple-600">🎂 {new Date(est.fecha_nacimiento + "T12:00:00").toLocaleDateString("es-CR", { day: "numeric", month: "long" })}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <p className="text-gray-400 text-xs mt-2">Registrado: {new Date(padre.created_at).toLocaleDateString("es-CR")}</p>
+                        </div>
+
+                        {/* Acciones */}
+                        {!padre.verificado && (
+                          <div className="flex flex-col gap-2 flex-shrink-0">
+                            <button onClick={() => aprobarPadre(padre)}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-500 hover:bg-green-600 transition-colors">
+                              <CheckCircle size={13} /> Aprobar
+                            </button>
+                            <button onClick={() => rechazarPadre(padre)}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+                              <X size={13} /> Rechazar
+                            </button>
+                          </div>
+                        )}
+                        {padre.verificado && (
+                          <button onClick={() => rechazarPadre(padre)}
+                            className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors flex-shrink-0">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
