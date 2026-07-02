@@ -69,12 +69,14 @@ export default function VidaEstudiantilSection() {
   }, []);
 
   const scrollTo = (id: string) => {
-  const el = document.querySelector(id);
-  if (el) {
-    const offset = 80;
-    const top = el.getBoundingClientRect().top + window.scrollY - offset;
-    window.scrollTo({ top, behavior: "smooth" });
-  }
+  setTimeout(() => {
+    const el = document.querySelector(id);
+    if (el) {
+      const offset = 80;
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: "smooth" });
+    }
+  }, 50);
 };
 
   return (
