@@ -153,7 +153,6 @@ export default function AdminPanel() {
       if (!session) setLocation("/admin/login");
       else setSessionToken(session.access_token);
     });
-    });
   }, []);
 
   useEffect(() => {
