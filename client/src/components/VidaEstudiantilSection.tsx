@@ -68,7 +68,14 @@ export default function VidaEstudiantilSection() {
     cargar();
   }, []);
 
-  const scrollTo = (id: string) => document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
+  const scrollTo = (id: string) => {
+  const el = document.querySelector(id);
+  if (el) {
+    const offset = 80;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
+};
 
   return (
     <section id="vida-estudiantil" className="py-16 sm:py-20 lg:py-28 bg-[oklch(0.97_0.005_255)]">
