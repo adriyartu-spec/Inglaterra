@@ -1,0 +1,267 @@
+/* =============================================================
+   ESCUELA INGLATERRA – IDENTIDAD VISUAL
+   FASE 1 WOW VISUAL — Paleta actualizada desde el escudo real
+   CAMBIOS vs versión anterior:
+   - Nueva variable --color-ei-electric: azul eléctrico real del escudo
+     (#1565C0 / oklch 0.42 0.22 255) — reemplaza el navy genérico
+   - --color-ei-navy: azul profundo para fondos oscuros (oklch 0.32 0.15 250)
+   - --color-ei-navy-dark: casi negro-azul para hero y footer
+   - --color-ei-gold: dorado más vibrante y saturado (oklch 0.75 0.15 72)
+   - --color-ei-gold-light: crema-dorado para textos sobre oscuro
+   - Nuevas animaciones: float-particle, gold-bar, hero-reveal
+   - Keyframes para transition-duration-800 y 1500ms custom
+   ============================================================= */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ── NUEVA Paleta Institucional Escuela Inglaterra ── */
+  /* Azul eléctrico real del escudo — el color icónico del edificio */
+  --color-ei-electric:    oklch(0.45 0.20 240);
+  /* Azul profundo para secciones de fondo con contenido */
+  --color-ei-navy:        oklch(0.20 0.08 258);
+  /* Casi negro-azul: hero, footer, galería */
+  --color-ei-navy-dark:   oklch(0.22 0.12 250);
+  /* Azul claro para hovers y acentos */
+  --color-ei-blue-light:  oklch(0.60 0.18 255);
+  /* Dorado más vibrante — extraído del sol del escudo */
+  --color-ei-gold:        oklch(0.75 0.15 72);
+  /* Dorado suave para textos sobre fondos oscuros */
+  --color-ei-gold-light:  oklch(0.88 0.10 80);
+  /* Crema cálida para fondos de secciones light */
+  --color-ei-cream:       oklch(0.98 0.01 80);
+  /* Rojo Costa Rica — para detalles patrióticos */
+  --color-ei-red-cr:      oklch(0.50 0.22 25);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0.05 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.05 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.05 258);
+  --primary: oklch(0.42 0.22 255);       /* azul eléctrico del escudo */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.95 0.01 255);
+  --secondary-foreground: oklch(0.20 0.08 258);
+  --muted: oklch(0.96 0.005 255);
+  --muted-foreground: oklch(0.50 0.03 255);
+  --accent: oklch(0.75 0.15 72);         /* dorado vibrante */
+  --accent-foreground: oklch(0.13 0.05 258);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.88 0.01 255);
+  --input: oklch(0.88 0.01 255);
+  --ring: oklch(0.42 0.22 255);
+  --chart-1: oklch(0.42 0.22 255);
+  --chart-2: oklch(0.60 0.18 255);
+  --chart-3: oklch(0.35 0.09 255);
+  --chart-4: oklch(0.75 0.15 72);
+  --chart-5: oklch(0.20 0.08 258);
+  --sidebar: oklch(0.20 0.08 258);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.75 0.15 72);
+  --sidebar-primary-foreground: oklch(0.13 0.05 258);
+  --sidebar-accent: oklch(0.28 0.09 258);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.28 0.09 258);
+  --sidebar-ring: oklch(0.60 0.18 255);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Serif Display', serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+
+  /* ── Animaciones de entrada al scroll ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.65s cubic-bezier(0.23, 1, 0.32, 1),
+                transform 0.65s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── Transiciones de duración custom ── */
+  .duration-800 {
+    transition-duration: 800ms;
+  }
+  .duration-1500 {
+    transition-duration: 1500ms;
+  }
+
+  /* ── Línea decorativa dorada ── */
+  .gold-underline {
+    position: relative;
+    display: inline-block;
+  }
+  .gold-underline::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -6px;
+    width: 60px;
+    height: 3px;
+    background: var(--color-ei-gold);
+    border-radius: 2px;
+  }
+
+  /* ── Botón institucional — azul eléctrico del escudo ── */
+  .btn-inst {
+    background: var(--color-ei-electric);
+    color: white;
+    padding: 0.75rem 2rem;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    border: 2px solid transparent;
+  }
+  .btn-inst:hover {
+    background: var(--color-ei-navy);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px oklch(0.42 0.22 255 / 0.35);
+  }
+  .btn-inst:active {
+    transform: scale(0.97);
+  }
+
+  .btn-inst-outline {
+    background: transparent;
+    color: var(--color-ei-electric);
+    padding: 0.75rem 2rem;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    border: 2px solid var(--color-ei-electric);
+  }
+  .btn-inst-outline:hover {
+    background: var(--color-ei-electric);
+    color: white;
+  }
+
+  /* ── Navbar scroll effect ── */
+  .navbar-scrolled {
+    background: var(--color-ei-navy) !important;
+    box-shadow: 0 2px 20px oklch(0.20 0.08 258 / 0.4);
+  }
+
+  /* ── Partículas flotantes del hero ── */
+  @keyframes float-particle {
+    0%, 100% { transform: translateY(0px) scale(1);   opacity: var(--p-opacity, 0.12); }
+    50%       { transform: translateY(-12px) scale(1.2); opacity: calc(var(--p-opacity, 0.12) * 1.8); }
+  }
+  .animate-float-particle {
+    animation: float-particle 4s ease-in-out infinite;
+  }
+
+  /* ── Hover scale custom ── */
+  .group-hover\:scale-108:is(:hover > *),
+  .group:hover .group-hover\:scale-108 {
+    transform: scale(1.08);
+  }
+
+  /* ── Line-clamp-2 ── */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
