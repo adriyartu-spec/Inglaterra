@@ -1,22 +1,20 @@
 /* =============================================================
    NAVBAR – Escuela Inglaterra
-   CAMBIOS:
-   - Agregado "Oferta Académica" después de "Nuestra Identidad"
-   - "Junta Educativa" → "Apoyos Adicionales"
-   - Eliminado "Noticias"
+   Diseño: "Orgullo Costarricense" – Editorial Contemporáneo
+   Fondo transparente → azul marino sólido al hacer scroll
    ============================================================= */
 
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 
 const navLinks = [
-  { label: "Inicio",             href: "#inicio"            },
-  { label: "Nuestra Identidad",  href: "#identidad"         },
-  { label: "Oferta Académica",   href: "#oferta-academica"  },
-  { label: "Historia",           href: "#historia"          },
-  { label: "Vida Estudiantil",   href: "#vida-estudiantil"  },
-  { label: "Apoyos Adicionales", href: "#junta"             },
-  { label: "Contacto",           href: "#contacto"          },
+  { label: "Inicio", href: "#inicio" },
+  { label: "Nuestra Identidad", href: "#identidad" },
+  { label: "Historia", href: "#historia" },
+  { label: "Vida Estudiantil", href: "#vida-estudiantil" },
+  { label: "Junta Educativa", href: "#junta" },
+  { label: "Noticias", href: "#noticias" },
+  { label: "Contacto", href: "#contacto" },
 ];
 
 export default function Navbar() {
@@ -32,7 +30,9 @@ export default function Navbar() {
   const handleNavClick = (href: string) => {
     setMobileOpen(false);
     const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   return (
@@ -47,7 +47,10 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo + nombre */}
-            <button onClick={() => handleNavClick("#inicio")} className="flex items-center gap-3 group">
+            <button
+              onClick={() => handleNavClick("#inicio")}
+              className="flex items-center gap-3 group"
+            >
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663744735795/fwbUywmTVnttLNyf.png"
                 alt="Escudo Escuela Inglaterra"
@@ -57,7 +60,9 @@ export default function Navbar() {
                 <p className="text-white font-bold text-sm leading-tight" style={{ fontFamily: "'DM Serif Display', serif" }}>
                   Escuela Inglaterra
                 </p>
-                <p className="text-white/70 text-xs leading-tight">San Rafael de Montes de Oca</p>
+                <p className="text-white/70 text-xs leading-tight">
+                  San Rafael de Montes de Oca
+                </p>
               </div>
             </button>
 
