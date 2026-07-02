@@ -162,7 +162,7 @@ export default function AdminPanel() {
   }, [usuario]);
 
   useEffect(() => {
-    if (!escuelaId) return;
+    if (!escuelaId || !sessionToken) return;
     if (modulo === "galeria") cargarFotos();
     if (modulo === "comunicados") cargarComunicados();
     if (modulo === "eventos") cargarEventos();
@@ -170,7 +170,7 @@ export default function AdminPanel() {
     if (modulo === "destacados") cargarDestacados();
     if (modulo === "orgullo") cargarReconocimientos();
     if (modulo === "usuarios") cargarUsuarios();
-  }, [escuelaId, modulo]);
+  }, [escuelaId, modulo, sessionToken]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
