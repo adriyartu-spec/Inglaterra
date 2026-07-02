@@ -23,7 +23,7 @@ export default function Footer() {
             <div className="lg:col-span-1">
               <div className="flex items-center gap-3 mb-4">
                 <img
-                  src="/manus-storage/Escudo_25c2020a.png"
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663744735795/fwbUywmTVnttLNyf.png"
                   alt="Escudo Escuela Inglaterra"
                   className="h-14 w-auto"
                 />
