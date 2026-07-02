@@ -12,6 +12,7 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import IdentidadSection from "@/components/IdentidadSection";
+import OfertaAcademicaSection from "@/components/OfertaAcademicaSection";
 import HistoriaSection from "@/components/HistoriaSection";
 import VidaEstudiantilSection from "@/components/VidaEstudiantilSection";
 import GaleriaSection from "@/components/GaleriaSection"; // ← NUEVO Fase 1
@@ -28,6 +29,7 @@ export default function Home() {
       <Navbar />
       <HeroSection />
       <IdentidadSection />
+      <OfertaAcademicaSection />
       <HistoriaSection />
       <VidaEstudiantilSection />
       <GaleriaSection />      {/* ← NUEVO Fase 1 */}
