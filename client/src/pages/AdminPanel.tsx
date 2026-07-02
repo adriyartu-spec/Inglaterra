@@ -1,7 +1,7 @@
 // CAMBIOS:
-// - Módulo Comunicados habilitado en el CMS
-// - CRUD completo: crear, listar, eliminar comunicados
-// - Módulo Galería sin cambios
+// - Módulo Eventos habilitado en el CMS
+// - CRUD completo: crear, listar, publicar/ocultar, eliminar eventos
+// - Módulos Galería y Comunicados sin cambios
 
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -15,14 +15,20 @@ interface Foto {
   id: string; url: string; caption: string;
   categoria: string; destacada: boolean; publicada: boolean; created_at: string;
 }
-
 interface Comunicado {
   id: string; titulo: string; contenido: string;
   tipo: string; fecha_publicacion: string; fecha_vencimiento: string | null; publicado: boolean;
 }
+interface Evento {
+  id: string; titulo: string; descripcion: string | null;
+  fecha_inicio: string; fecha_fin: string | null;
+  hora_inicio: string | null; lugar: string | null;
+  categoria: string; publicado: boolean;
+}
 
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
 const TIPOS_COMUNICADO = ["general", "urgente", "informativo", "actividad", "logro"];
+const CATEGORIAS_EVENTO = ["General", "Acto cívico", "Reunión", "Cultural", "Deportivo", "Feria", "Académico", "Graduación"];
 const SUBDOMINIO = "inglaterra";
 
 export default function AdminPanel() {
@@ -54,6 +60,17 @@ export default function AdminPanel() {
     fecha_vencimiento: "",
   });
 
+  // Eventos
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [loadingEv, setLoadingEv] = useState(false);
+  const [showFormEv, setShowFormEv] = useState(false);
+  const [savingEv, setSavingEv] = useState(false);
+  const [evMsg, setEvMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [formEv, setFormEv] = useState({
+    titulo: "", descripcion: "", fecha_inicio: new Date().toISOString().split("T")[0],
+    fecha_fin: "", hora_inicio: "", lugar: "", categoria: "General",
+  });
+
   // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -75,6 +92,7 @@ export default function AdminPanel() {
     if (!escuelaId) return;
     if (modulo === "galeria") cargarFotos();
     if (modulo === "comunicados") cargarComunicados();
+    if (modulo === "eventos") cargarEventos();
   }, [escuelaId, modulo]);
 
   // ── GALERÍA ──
@@ -118,13 +136,11 @@ export default function AdminPanel() {
     await supabase.from("galeria_fotos").update({ publicada: !foto.publicada }).eq("id", foto.id);
     cargarFotos();
   }
-
   async function toggleDestacada(foto: Foto) {
     if (!foto.destacada) await supabase.from("galeria_fotos").update({ destacada: false }).eq("escuela_id", escuelaId!);
     await supabase.from("galeria_fotos").update({ destacada: !foto.destacada }).eq("id", foto.id);
     cargarFotos();
   }
-
   async function eliminarFoto(foto: Foto) {
     if (!confirm("¿Eliminar esta foto permanentemente?")) return;
     await supabase.from("galeria_fotos").delete().eq("id", foto.id);
@@ -139,20 +155,15 @@ export default function AdminPanel() {
     setComunicados(data ?? []);
     setLoadingCom(false);
   }
-
   async function guardarComunicado(e: React.FormEvent) {
     e.preventDefault();
     if (!escuelaId) return;
     setSavingCom(true); setComMsg(null);
     try {
       const { error } = await supabase.from("comunicados").insert({
-        escuela_id: escuelaId,
-        titulo: formCom.titulo,
-        contenido: formCom.contenido,
-        tipo: formCom.tipo,
-        fecha_publicacion: formCom.fecha_publicacion,
-        fecha_vencimiento: formCom.fecha_vencimiento || null,
-        publicado: true,
+        escuela_id: escuelaId, titulo: formCom.titulo, contenido: formCom.contenido,
+        tipo: formCom.tipo, fecha_publicacion: formCom.fecha_publicacion,
+        fecha_vencimiento: formCom.fecha_vencimiento || null, publicado: true,
       });
       if (error) throw error;
       setComMsg({ tipo: "ok", texto: "¡Comunicado publicado exitosamente!" });
@@ -166,16 +177,60 @@ export default function AdminPanel() {
       setTimeout(() => setComMsg(null), 4000);
     }
   }
-
   async function eliminarComunicado(id: string) {
     if (!confirm("¿Eliminar este comunicado?")) return;
     await supabase.from("comunicados").delete().eq("id", id);
     cargarComunicados();
   }
-
   async function togglePublicadoCom(com: Comunicado) {
     await supabase.from("comunicados").update({ publicado: !com.publicado }).eq("id", com.id);
     cargarComunicados();
+  }
+
+  // ── EVENTOS ──
+  async function cargarEventos() {
+    setLoadingEv(true);
+    const { data } = await supabase.from("eventos").select("*")
+      .eq("escuela_id", escuelaId).order("fecha_inicio", { ascending: true });
+    setEventos(data ?? []);
+    setLoadingEv(false);
+  }
+  async function guardarEvento(e: React.FormEvent) {
+    e.preventDefault();
+    if (!escuelaId) return;
+    setSavingEv(true); setEvMsg(null);
+    try {
+      const { error } = await supabase.from("eventos").insert({
+        escuela_id: escuelaId,
+        titulo: formEv.titulo,
+        descripcion: formEv.descripcion || null,
+        fecha_inicio: formEv.fecha_inicio,
+        fecha_fin: formEv.fecha_fin || null,
+        hora_inicio: formEv.hora_inicio || null,
+        lugar: formEv.lugar || null,
+        categoria: formEv.categoria,
+        publicado: true,
+      });
+      if (error) throw error;
+      setEvMsg({ tipo: "ok", texto: "¡Evento publicado exitosamente!" });
+      setFormEv({ titulo: "", descripcion: "", fecha_inicio: new Date().toISOString().split("T")[0], fecha_fin: "", hora_inicio: "", lugar: "", categoria: "General" });
+      setShowFormEv(false);
+      cargarEventos();
+    } catch {
+      setEvMsg({ tipo: "err", texto: "Error al guardar el evento." });
+    } finally {
+      setSavingEv(false);
+      setTimeout(() => setEvMsg(null), 4000);
+    }
+  }
+  async function eliminarEvento(id: string) {
+    if (!confirm("¿Eliminar este evento?")) return;
+    await supabase.from("eventos").delete().eq("id", id);
+    cargarEventos();
+  }
+  async function togglePublicadoEv(ev: Evento) {
+    await supabase.from("eventos").update({ publicado: !ev.publicado }).eq("id", ev.id);
+    cargarEventos();
   }
 
   async function cerrarSesion() {
@@ -190,9 +245,9 @@ export default function AdminPanel() {
   );
 
   const navItems = [
-    { id: "galeria",      label: "Galería",      icon: <Images size={18} />,     disabled: false },
-    { id: "comunicados",  label: "Comunicados",  icon: <Megaphone size={18} />,  disabled: false },
-    { id: "eventos",      label: "Eventos",      icon: <CalendarDays size={18} />, disabled: true },
+    { id: "galeria",     label: "Galería",     icon: <Images size={18} />,      disabled: false },
+    { id: "comunicados", label: "Comunicados", icon: <Megaphone size={18} />,   disabled: false },
+    { id: "eventos",     label: "Eventos",     icon: <CalendarDays size={18} />, disabled: false },
   ];
 
   return (
@@ -223,7 +278,6 @@ export default function AdminPanel() {
               }`}
             >
               {item.icon}{item.label}
-              {item.disabled && <span className="ml-auto text-xs text-white/20">Próximo</span>}
             </button>
           ))}
         </nav>
@@ -239,7 +293,7 @@ export default function AdminPanel() {
 
       <main className="flex-1 flex flex-col min-w-0">
         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button className="lg:hidden text-gray-500 hover:text-gray-700" onClick={() => setSidebarOpen(true)}>
+          <button className="lg:hidden text-gray-500" onClick={() => setSidebarOpen(true)}>
             <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
           </button>
           <h1 className="font-bold text-gray-800 text-lg" style={{ fontFamily: "'DM Serif Display', serif" }}>
@@ -257,8 +311,7 @@ export default function AdminPanel() {
               <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Subir nueva foto</h2>
               {uploadMsg && (
                 <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm mb-4 ${uploadMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                  {uploadMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                  {uploadMsg.texto}
+                  {uploadMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{uploadMsg.texto}
                 </div>
               )}
               <div className="grid sm:grid-cols-2 gap-4 mb-4">
@@ -303,15 +356,13 @@ export default function AdminPanel() {
                       <img src={foto.url} alt={foto.caption} className="w-full aspect-square object-cover" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
                         <div className="flex justify-end gap-1">
-                          <button onClick={() => toggleDestacada(foto)} className={`p-1.5 rounded-lg transition-colors ${foto.destacada ? "bg-yellow-400 text-white" : "bg-white/20 text-white hover:bg-white/40"}`}>
+                          <button onClick={() => toggleDestacada(foto)} className={`p-1.5 rounded-lg ${foto.destacada ? "bg-yellow-400 text-white" : "bg-white/20 text-white hover:bg-white/40"}`}>
                             {foto.destacada ? <Star size={14} fill="white" /> : <StarOff size={14} />}
                           </button>
-                          <button onClick={() => eliminarFoto(foto)} className="p-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors">
-                            <Trash2 size={14} />
-                          </button>
+                          <button onClick={() => eliminarFoto(foto)} className="p-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600"><Trash2 size={14} /></button>
                         </div>
                         <div>
-                          <p className="text-white text-xs leading-snug line-clamp-2">{foto.caption}</p>
+                          <p className="text-white text-xs line-clamp-2">{foto.caption}</p>
                           <button onClick={() => togglePublicada(foto)} className={`mt-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${foto.publicada ? "bg-green-500 text-white" : "bg-gray-400 text-white"}`}>
                             {foto.publicada ? "Publicada" : "Oculta"}
                           </button>
@@ -329,23 +380,18 @@ export default function AdminPanel() {
         {/* ── MÓDULO COMUNICADOS ── */}
         {modulo === "comunicados" && (
           <div className="flex-1 p-4 sm:p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div />
+            <div className="flex justify-end">
               <button onClick={() => setShowFormCom(!showFormCom)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
                 style={{ background: "var(--color-ei-electric)" }}>
                 {showFormCom ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo comunicado</>}
               </button>
             </div>
-
             {comMsg && (
               <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${comMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                {comMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                {comMsg.texto}
+                {comMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{comMsg.texto}
               </div>
             )}
-
-            {/* Formulario nuevo comunicado */}
             {showFormCom && (
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Nuevo comunicado</h2>
@@ -381,51 +427,135 @@ export default function AdminPanel() {
                       placeholder="Escriba el comunicado aquí..."
                       className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                   </div>
-                  <button type="submit" disabled={savingCom}
-                    className="btn-inst flex items-center gap-2 disabled:opacity-60">
+                  <button type="submit" disabled={savingCom} className="btn-inst flex items-center gap-2 disabled:opacity-60">
                     {savingCom ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar comunicado</>}
                   </button>
                 </form>
               </div>
             )}
-
-            {/* Lista de comunicados */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>
-                Comunicados publicados ({comunicados.length})
-              </h2>
-              {loadingCom ? (
-                <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
-              ) : comunicados.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-10">No hay comunicados. ¡Creá el primero!</p>
-              ) : (
+              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Comunicados ({comunicados.length})</h2>
+              {loadingCom ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : comunicados.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay comunicados.</p>
+              : (
                 <div className="space-y-3">
                   {comunicados.map((com) => (
-                    <div key={com.id} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div key={com.id} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            com.tipo === "urgente" ? "bg-red-100 text-red-700" :
-                            com.tipo === "actividad" ? "bg-purple-100 text-purple-700" :
-                            com.tipo === "logro" ? "bg-amber-100 text-amber-700" :
-                            "bg-blue-100 text-blue-700"
-                          }`}>{com.tipo}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${com.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                            {com.publicado ? "Publicado" : "Oculto"}
-                          </span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${com.tipo === "urgente" ? "bg-red-100 text-red-700" : com.tipo === "actividad" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>{com.tipo}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${com.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{com.publicado ? "Publicado" : "Oculto"}</span>
                         </div>
                         <h3 className="font-semibold text-gray-800 text-sm">{com.titulo}</h3>
                         <p className="text-gray-400 text-xs mt-0.5">{com.fecha_publicacion}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => togglePublicadoCom(com)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors">
+                        <button onClick={() => togglePublicadoCom(com)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
                           {com.publicado ? "Ocultar" : "Publicar"}
                         </button>
-                        <button onClick={() => eliminarComunicado(com.id)}
-                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors">
-                          <Trash2 size={15} />
+                        <button onClick={() => eliminarComunicado(com.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── MÓDULO EVENTOS ── */}
+        {modulo === "eventos" && (
+          <div className="flex-1 p-4 sm:p-6 space-y-6">
+            <div className="flex justify-end">
+              <button onClick={() => setShowFormEv(!showFormEv)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{ background: "var(--color-ei-electric)" }}>
+                {showFormEv ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo evento</>}
+              </button>
+            </div>
+
+            {evMsg && (
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${evMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {evMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{evMsg.texto}
+              </div>
+            )}
+
+            {showFormEv && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Nuevo evento</h2>
+                <form onSubmit={guardarEvento} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Título del evento *</label>
+                    <input type="text" required value={formEv.titulo} onChange={(e) => setFormEv({ ...formEv, titulo: e.target.value })}
+                      placeholder="Ej: Feria de Ciencias 2026"
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio *</label>
+                      <input type="date" required value={formEv.fecha_inicio} onChange={(e) => setFormEv({ ...formEv, fecha_inicio: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
+                      <input type="date" value={formEv.fecha_fin} onChange={(e) => setFormEv({ ...formEv, fecha_fin: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
+                      <input type="time" value={formEv.hora_inicio} onChange={(e) => setFormEv({ ...formEv, hora_inicio: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                      <select value={formEv.categoria} onChange={(e) => setFormEv({ ...formEv, categoria: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {CATEGORIAS_EVENTO.map((c) => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Lugar</label>
+                    <input type="text" value={formEv.lugar} onChange={(e) => setFormEv({ ...formEv, lugar: e.target.value })}
+                      placeholder="Ej: Salón principal, Cancha deportiva"
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                    <textarea rows={3} value={formEv.descripcion} onChange={(e) => setFormEv({ ...formEv, descripcion: e.target.value })}
+                      placeholder="Descripción opcional del evento..."
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <button type="submit" disabled={savingEv} className="btn-inst flex items-center gap-2 disabled:opacity-60">
+                    {savingEv ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar evento</>}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Eventos ({eventos.length})</h2>
+              {loadingEv ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : eventos.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay eventos. ¡Creá el primero!</p>
+              : (
+                <div className="space-y-3">
+                  {eventos.map((ev) => (
+                    <div key={ev.id} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{ev.categoria}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{ev.publicado ? "Publicado" : "Oculto"}</span>
+                        </div>
+                        <h3 className="font-semibold text-gray-800 text-sm">{ev.titulo}</h3>
+                        <p className="text-gray-400 text-xs mt-0.5">
+                          {ev.fecha_inicio}{ev.hora_inicio ? ` · ${ev.hora_inicio}` : ""}{ev.lugar ? ` · ${ev.lugar}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => togglePublicadoEv(ev)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
+                          {ev.publicado ? "Ocultar" : "Publicar"}
                         </button>
+                        <button onClick={() => eliminarEvento(ev.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
                       </div>
                     </div>
                   ))}
