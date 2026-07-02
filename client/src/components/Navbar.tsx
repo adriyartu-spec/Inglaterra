@@ -30,10 +30,14 @@ export default function Navbar() {
   }, []);
 
   const handleNavClick = (href: string) => {
-    setMobileOpen(false);
-    const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  setMobileOpen(false);
+  const el = document.querySelector(href);
+  if (el) {
+    const offset = 80;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
+};
 
   return (
     <>
