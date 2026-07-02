@@ -23,6 +23,9 @@ import NoticiasSection from "@/components/NoticiasSection";
 import GreenJoySection from "@/components/GreenJoySection";
 import ContactoSection from "@/components/ContactoSection";
 import Footer from "@/components/Footer";
+import EstudiantesDestacadosSection from "@/components/EstudiantesDestacadosSection";
+
+
 
 export default function Home() {
   return (
@@ -33,6 +36,7 @@ export default function Home() {
       <OfertaAcademicaSection />
       <HistoriaSection />
       <VidaEstudiantilSection />
+      <EstudiantesDestacadosSection />
       <GaleriaSection />      {/* ← NUEVO Fase 1 */}
       <JuntaSection />
       <CalendarioSection />
