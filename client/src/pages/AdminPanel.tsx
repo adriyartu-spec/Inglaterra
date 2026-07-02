@@ -43,6 +43,11 @@ interface Reconocimiento {
   fecha: string; publicado: boolean;
 }
 
+interface Usuario {
+  id: string; email: string; created_at: string;
+  last_sign_in_at: string | null;
+}
+
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
 const TIPOS_COMUNICADO = ["general", "urgente", "informativo", "actividad", "logro"];
 const CATEGORIAS_EVENTO = ["General", "Acto cívico", "Reunión", "Cultural", "Deportivo", "Feria", "Académico", "Graduación"];
@@ -57,6 +62,7 @@ const TIPOS_RECONOCIMIENTO = [
   { value: "memorable",  label: "📸 Momento memorable" },
 ];
 const SUBDOMINIO = "inglaterra";
+const FUNCTIONS_URL = "https://oqlcmrzkppdfpoqglskn.supabase.co/functions/v1";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -127,14 +133,26 @@ export default function AdminPanel() {
   const [filtroPadres, setFiltroPadres] = useState<"todos" | "pendientes" | "aprobados">("pendientes");
   const [padresMsg, setPadresMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
 
+  // Usuarios del panel
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+  const [showFormUsuario, setShowFormUsuario] = useState(false);
+  const [savingUsuario, setSavingUsuario] = useState(false);
+  const [usuariosMsg, setUsuariosMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [formUsuario, setFormUsuario] = useState({ email: "", password: "" });
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
   // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) { setLocation("/admin/login"); return; }
       setUsuario(data.session.user);
+      setSessionToken(data.session.access_token);
     });
     supabase.auth.onAuthStateChange((_, session) => {
       if (!session) setLocation("/admin/login");
+      else setSessionToken(session.access_token);
+    });
     });
   }, []);
 
@@ -152,11 +170,86 @@ export default function AdminPanel() {
     if (modulo === "familias") cargarPadres();
     if (modulo === "destacados") cargarDestacados();
     if (modulo === "orgullo") cargarReconocimientos();
+    if (modulo === "usuarios") cargarUsuarios();
   }, [escuelaId, modulo]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
   }, [filtroPadres]);
+
+  // ── USUARIOS DEL PANEL ──
+  async function cargarUsuarios() {
+    setLoadingUsuarios(true);
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/manage-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ action: "list" }),
+      });
+      const data = await res.json();
+      setUsuarios(data.users ?? []);
+    } catch {
+      setUsuariosMsg({ tipo: "err", texto: "Error al cargar usuarios." });
+    } finally {
+      setLoadingUsuarios(false);
+    }
+  }
+
+  async function crearUsuario(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingUsuario(true); setUsuariosMsg(null);
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/manage-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ action: "create", email: formUsuario.email, password: formUsuario.password }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setUsuariosMsg({ tipo: "ok", texto: `✓ Usuario ${formUsuario.email} creado exitosamente.` });
+      setFormUsuario({ email: "", password: "" });
+      setShowFormUsuario(false);
+      cargarUsuarios();
+    } catch (err: any) {
+      setUsuariosMsg({ tipo: "err", texto: err.message ?? "Error al crear usuario." });
+    } finally {
+      setSavingUsuario(false);
+      setTimeout(() => setUsuariosMsg(null), 5000);
+    }
+  }
+
+  async function eliminarUsuario(userId: string, email: string) {
+    if (userId === usuario?.id) {
+      setUsuariosMsg({ tipo: "err", texto: "No podés eliminar tu propio usuario." });
+      setTimeout(() => setUsuariosMsg(null), 3000);
+      return;
+    }
+    if (!confirm(`¿Eliminar el acceso de ${email}?`)) return;
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/manage-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ action: "delete", userId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setUsuariosMsg({ tipo: "ok", texto: `Usuario eliminado.` });
+      cargarUsuarios();
+    } catch (err: any) {
+      setUsuariosMsg({ tipo: "err", texto: err.message ?? "Error al eliminar usuario." });
+    } finally {
+      setTimeout(() => setUsuariosMsg(null), 3000);
+    }
+  }
 
   // ── ORGULLO INGLATERRA — RECONOCIMIENTOS ──
   async function cargarReconocimientos() {
@@ -449,6 +542,7 @@ export default function AdminPanel() {
     { id: "destacados",  label: "Destacados",  icon: <Trophy size={18} />,        disabled: false },
     { id: "orgullo",     label: "Orgullo",     icon: <Star size={18} />,          disabled: false },
     { id: "familias",    label: "Familias",    icon: <Users size={18} />,         disabled: false },
+    { id: "usuarios",    label: "Usuarios",    icon: <Users size={18} />,         disabled: false },
   ];
 
   return (
@@ -499,6 +593,7 @@ export default function AdminPanel() {
             {modulo === "destacados" && "Estudiantes Destacados"}
             {modulo === "orgullo" && "Orgullo Inglaterra"}
             {modulo === "familias" && "Familias Registradas"}
+            {modulo === "usuarios" && "Usuarios del Panel"}
           </h1>
           <a href="/" target="_blank" className="ml-auto text-xs text-blue-600 hover:underline">Ver sitio →</a>
         </header>
@@ -1039,6 +1134,98 @@ export default function AdminPanel() {
                           </button>
                         )}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* ── USUARIOS DEL PANEL ── */}
+        {modulo === "usuarios" && (
+          <div className="flex-1 p-4 sm:p-6 space-y-6">
+            <div className="flex justify-end">
+              <button onClick={() => setShowFormUsuario(!showFormUsuario)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{ background: "var(--color-ei-electric)" }}>
+                {showFormUsuario ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo usuario</>}
+              </button>
+            </div>
+
+            {usuariosMsg && (
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${usuariosMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {usuariosMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{usuariosMsg.texto}
+              </div>
+            )}
+
+            {showFormUsuario && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                  Nuevo usuario del panel
+                </h2>
+                <form onSubmit={crearUsuario} className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico *</label>
+                      <input type="email" required value={formUsuario.email}
+                        onChange={(e) => setFormUsuario({ ...formUsuario, email: e.target.value })}
+                        placeholder="maestra@escuela.com"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña temporal *</label>
+                      <input type="password" required minLength={8} value={formUsuario.password}
+                        onChange={(e) => setFormUsuario({ ...formUsuario, password: e.target.value })}
+                        placeholder="Mínimo 8 caracteres"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-xs">
+                    El usuario podrá cambiar su contraseña después de iniciar sesión.
+                  </p>
+                  <button type="submit" disabled={savingUsuario} className="btn-inst flex items-center gap-2 disabled:opacity-60">
+                    {savingUsuario ? <><Loader2 size={16} className="animate-spin" /> Creando...</> : <><CheckCircle size={16} /> Crear usuario</>}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-gray-800 text-base mb-2" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                Usuarios con acceso ({usuarios.length})
+              </h2>
+              <p className="text-gray-400 text-xs mb-5">
+                Estos usuarios pueden iniciar sesión en el panel de administración.
+              </p>
+
+              {loadingUsuarios ? (
+                <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              ) : usuarios.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">No hay usuarios.</p>
+              ) : (
+                <div className="space-y-3">
+                  {usuarios.map((u) => (
+                    <div key={u.id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
+                      <div className="w-10 h-10 rounded-full bg-[oklch(0.22_0.07_255)] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {u.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800 text-sm truncate">{u.email}</p>
+                        <p className="text-gray-400 text-xs">
+                          Creado: {new Date(u.created_at).toLocaleDateString("es-CR")}
+                          {u.last_sign_in_at && ` · Último acceso: ${new Date(u.last_sign_in_at).toLocaleDateString("es-CR")}`}
+                        </p>
+                      </div>
+                      {u.id === usuario?.id ? (
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium flex-shrink-0">
+                          Tú
+                        </span>
+                      ) : (
+                        <button onClick={() => eliminarUsuario(u.id, u.email)}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
