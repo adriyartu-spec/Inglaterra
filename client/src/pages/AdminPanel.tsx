@@ -1179,6 +1179,15 @@ export default function AdminPanel() {
                         className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
+                    <select value={formUsuario.rol} onChange={(e) => setFormUsuario({ ...formUsuario, rol: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="director">👩‍💼 Director(a) — Acceso completo</option>
+                      <option value="maestra">👩‍🏫 Maestra — Galería, comunicados y eventos</option>
+                      <option value="administrativo">🗂️ Administrativo — Solo lectura</option>
+                    </select>
+                  </div>
                   <p className="text-gray-400 text-xs">
                     El usuario podrá cambiar su contraseña después de iniciar sesión.
                   </p>
@@ -1214,6 +1223,11 @@ export default function AdminPanel() {
                           Creado: {new Date(u.created_at).toLocaleDateString("es-CR")}
                           {u.last_sign_in_at && ` · Último acceso: ${new Date(u.last_sign_in_at).toLocaleDateString("es-CR")}`}
                         </p>
+                        {u.user_metadata?.rol && (
+                          <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
+                            {u.user_metadata.rol === 'director' ? '👩‍💼 Director(a)' : u.user_metadata.rol === 'maestra' ? '👩‍🏫 Maestra' : '🗂️ Administrativo'}
+                          </span>
+                        )}
                       </div>
                       {u.id === usuario?.id ? (
                         <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium flex-shrink-0">
