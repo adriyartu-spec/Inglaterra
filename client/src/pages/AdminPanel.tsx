@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import {
   Images, CalendarDays, Megaphone, LogOut, Upload,
-  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X, Users
+  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X, Users, Trophy
 } from "lucide-react";
 
 interface Foto {
@@ -25,6 +25,12 @@ interface Evento {
   hora_inicio: string | null; lugar: string | null;
   categoria: string; publicado: boolean;
 }
+interface EstudianteDestacado {
+  id: string; nombre: string; grado: string;
+  promedio: number | null; semestre: string;
+  lugar: number; foto_url: string | null; logro: string | null; publicado: boolean;
+}
+
 interface Padre {
   id: string; nombre: string; apellidos: string; cedula: string;
   email: string; telefono: string | null; verificado: boolean; created_at: string;
@@ -34,6 +40,8 @@ interface Padre {
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
 const TIPOS_COMUNICADO = ["general", "urgente", "informativo", "actividad", "logro"];
 const CATEGORIAS_EVENTO = ["General", "Acto cívico", "Reunión", "Cultural", "Deportivo", "Feria", "Académico", "Graduación"];
+const SEMESTRES = ["I-2026", "II-2026", "I-2027", "II-2027"];
+const GRADOS = ["Kínder", "Preparatoria", "1°", "2°", "3°", "4°", "5°", "6°"];
 const SUBDOMINIO = "inglaterra";
 
 export default function AdminPanel() {
@@ -76,6 +84,17 @@ export default function AdminPanel() {
     fecha_fin: "", hora_inicio: "", lugar: "", categoria: "General",
   });
 
+  // Estudiantes Destacados
+  const [destacados, setDestacados] = useState<EstudianteDestacado[]>([]);
+  const [loadingDest, setLoadingDest] = useState(false);
+  const [showFormDest, setShowFormDest] = useState(false);
+  const [savingDest, setSavingDest] = useState(false);
+  const [destMsg, setDestMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [formDest, setFormDest] = useState({
+    nombre: "", grado: "1°", promedio: "", semestre: "I-2026",
+    lugar: "1", logro: "",
+  });
+
   // Familias
   const [padres, setPadres] = useState<Padre[]>([]);
   const [loadingPadres, setLoadingPadres] = useState(false);
@@ -105,11 +124,57 @@ export default function AdminPanel() {
     if (modulo === "comunicados") cargarComunicados();
     if (modulo === "eventos") cargarEventos();
     if (modulo === "familias") cargarPadres();
+    if (modulo === "destacados") cargarDestacados();
   }, [escuelaId, modulo]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
   }, [filtroPadres]);
+
+  // ── ESTUDIANTES DESTACADOS ──
+  async function cargarDestacados() {
+    setLoadingDest(true);
+    const { data } = await supabase.from("estudiantes_destacados").select("*")
+      .eq("escuela_id", escuelaId).order("semestre", { ascending: false }).order("lugar", { ascending: true });
+    setDestacados(data ?? []);
+    setLoadingDest(false);
+  }
+  async function guardarDestacado(e: React.FormEvent) {
+    e.preventDefault();
+    if (!escuelaId) return;
+    setSavingDest(true); setDestMsg(null);
+    try {
+      const { error } = await supabase.from("estudiantes_destacados").insert({
+        escuela_id: escuelaId,
+        nombre: formDest.nombre,
+        grado: formDest.grado,
+        promedio: formDest.promedio ? parseFloat(formDest.promedio) : null,
+        semestre: formDest.semestre,
+        lugar: parseInt(formDest.lugar),
+        logro: formDest.logro || null,
+        publicado: true,
+      });
+      if (error) throw error;
+      setDestMsg({ tipo: "ok", texto: "¡Estudiante publicado exitosamente!" });
+      setFormDest({ nombre: "", grado: "1°", promedio: "", semestre: "I-2026", lugar: "1", logro: "" });
+      setShowFormDest(false);
+      cargarDestacados();
+    } catch {
+      setDestMsg({ tipo: "err", texto: "Error al guardar el estudiante." });
+    } finally {
+      setSavingDest(false);
+      setTimeout(() => setDestMsg(null), 4000);
+    }
+  }
+  async function eliminarDestacado(id: string) {
+    if (!confirm("¿Eliminar este estudiante destacado?")) return;
+    await supabase.from("estudiantes_destacados").delete().eq("id", id);
+    cargarDestacados();
+  }
+  async function togglePublicadoDest(est: EstudianteDestacado) {
+    await supabase.from("estudiantes_destacados").update({ publicado: !est.publicado }).eq("id", est.id);
+    cargarDestacados();
+  }
 
   // ── GALERÍA ──
   async function cargarFotos() {
@@ -281,6 +346,7 @@ export default function AdminPanel() {
     { id: "galeria",     label: "Galería",     icon: <Images size={18} />,       disabled: false },
     { id: "comunicados", label: "Comunicados", icon: <Megaphone size={18} />,    disabled: false },
     { id: "eventos",     label: "Eventos",     icon: <CalendarDays size={18} />,  disabled: false },
+    { id: "destacados",  label: "Destacados",  icon: <Trophy size={18} />,        disabled: false },
     { id: "familias",    label: "Familias",    icon: <Users size={18} />,         disabled: false },
   ];
 
@@ -329,6 +395,7 @@ export default function AdminPanel() {
             {modulo === "galeria" && "Gestión de Galería"}
             {modulo === "comunicados" && "Comunicados"}
             {modulo === "eventos" && "Gestión de Eventos"}
+            {modulo === "destacados" && "Estudiantes Destacados"}
             {modulo === "familias" && "Familias Registradas"}
           </h1>
           <a href="/" target="_blank" className="ml-auto text-xs text-blue-600 hover:underline">Ver sitio →</a>
@@ -547,6 +614,112 @@ export default function AdminPanel() {
                       <div className="flex items-center gap-2">
                         <button onClick={() => togglePublicadoEv(ev)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">{ev.publicado ? "Ocultar" : "Publicar"}</button>
                         <button onClick={() => eliminarEvento(ev.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── ESTUDIANTES DESTACADOS ── */}
+        {modulo === "destacados" && (
+          <div className="flex-1 p-4 sm:p-6 space-y-6">
+            <div className="flex justify-end">
+              <button onClick={() => setShowFormDest(!showFormDest)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{ background: "var(--color-ei-electric)" }}>
+                {showFormDest ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo estudiante</>}
+              </button>
+            </div>
+
+            {destMsg && (
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${destMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {destMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{destMsg.texto}
+              </div>
+            )}
+
+            {showFormDest && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>Nuevo estudiante destacado</h2>
+                <form onSubmit={guardarDestacado} className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
+                      <input type="text" required value={formDest.nombre} onChange={(e) => setFormDest({ ...formDest, nombre: e.target.value })}
+                        placeholder="Nombre del estudiante"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Grado *</label>
+                      <select value={formDest.grado} onChange={(e) => setFormDest({ ...formDest, grado: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {GRADOS.map((g) => <option key={g}>{g}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Promedio</label>
+                      <input type="number" min="0" max="100" step="0.1" value={formDest.promedio} onChange={(e) => setFormDest({ ...formDest, promedio: e.target.value })}
+                        placeholder="Ej: 98.5"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Semestre *</label>
+                      <select value={formDest.semestre} onChange={(e) => setFormDest({ ...formDest, semestre: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {SEMESTRES.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Lugar *</label>
+                      <select value={formDest.lugar} onChange={(e) => setFormDest({ ...formDest, lugar: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="1">🥇 Primer lugar</option>
+                        <option value="2">🥈 Segundo lugar</option>
+                        <option value="3">🥉 Tercer lugar</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Logro / Mérito</label>
+                      <input type="text" value={formDest.logro} onChange={(e) => setFormDest({ ...formDest, logro: e.target.value })}
+                        placeholder="Ej: Excelencia en matemáticas"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={savingDest} className="btn-inst flex items-center gap-2 disabled:opacity-60">
+                    {savingDest ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar estudiante</>}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                Estudiantes destacados ({destacados.length})
+              </h2>
+              {loadingDest ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : destacados.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay estudiantes destacados. ¡Agregá el primero!</p>
+              : (
+                <div className="space-y-3">
+                  {destacados.map((est) => (
+                    <div key={est.id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
+                      <div className="text-2xl">{est.lugar === 1 ? "🥇" : est.lugar === 2 ? "🥈" : "🥉"}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{est.semestre}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${est.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                            {est.publicado ? "Publicado" : "Oculto"}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-gray-800 text-sm">{est.nombre}</h3>
+                        <p className="text-gray-400 text-xs">{est.grado} grado{est.promedio ? ` · ${est.promedio}` : ""}{est.logro ? ` · ${est.logro}` : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => togglePublicadoDest(est)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
+                          {est.publicado ? "Ocultar" : "Publicar"}
+                        </button>
+                        <button onClick={() => eliminarDestacado(est.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
                       </div>
                     </div>
                   ))}
