@@ -37,11 +37,25 @@ interface Padre {
   estudiantes: { nombre: string; apellidos: string; grado: string; fecha_nacimiento: string | null }[];
 }
 
+interface Reconocimiento {
+  id: string; escuela_id: string; tipo: string; titulo: string;
+  descripcion: string | null; imagen_url: string | null;
+  fecha: string; publicado: boolean;
+}
+
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
 const TIPOS_COMUNICADO = ["general", "urgente", "informativo", "actividad", "logro"];
 const CATEGORIAS_EVENTO = ["General", "Acto cívico", "Reunión", "Cultural", "Deportivo", "Feria", "Académico", "Graduación"];
 const SEMESTRES = ["I-2026", "II-2026", "I-2027", "II-2027"];
 const GRADOS = ["Kínder", "Preparatoria", "1°", "2°", "3°", "4°", "5°", "6°"];
+const TIPOS_RECONOCIMIENTO = [
+  { value: "promedio",   label: "🌟 Primeros promedios del semestre" },
+  { value: "proyecto",   label: "🔬 Proyecto sobresaliente" },
+  { value: "deportivo",  label: "🏆 Logro deportivo" },
+  { value: "artistico",  label: "🎨 Logro artístico" },
+  { value: "solidario",  label: "🤝 Acción solidaria" },
+  { value: "memorable",  label: "📸 Momento memorable" },
+];
 const SUBDOMINIO = "inglaterra";
 
 export default function AdminPanel() {
@@ -95,6 +109,18 @@ export default function AdminPanel() {
     lugar: "1", logro: "",
   });
 
+  // Orgullo Inglaterra — Reconocimientos
+  const [reconocimientos, setReconocimientos] = useState<Reconocimiento[]>([]);
+  const [loadingRec, setLoadingRec] = useState(false);
+  const [showFormRec, setShowFormRec] = useState(false);
+  const [savingRec, setSavingRec] = useState(false);
+  const [recMsg, setRecMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [recFile, setRecFile] = useState<File | null>(null);
+  const recFileRef = useRef<HTMLInputElement>(null);
+  const [formRec, setFormRec] = useState({
+    tipo: "promedio", titulo: "", descripcion: "", fecha: new Date().toISOString().split("T")[0],
+  });
+
   // Familias
   const [padres, setPadres] = useState<Padre[]>([]);
   const [loadingPadres, setLoadingPadres] = useState(false);
@@ -125,11 +151,85 @@ export default function AdminPanel() {
     if (modulo === "eventos") cargarEventos();
     if (modulo === "familias") cargarPadres();
     if (modulo === "destacados") cargarDestacados();
+    if (modulo === "orgullo") cargarReconocimientos();
   }, [escuelaId, modulo]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
   }, [filtroPadres]);
+
+  // ── ORGULLO INGLATERRA — RECONOCIMIENTOS ──
+  async function cargarReconocimientos() {
+    setLoadingRec(true);
+    const { data } = await supabase.from("reconocimientos").select("*")
+      .eq("escuela_id", escuelaId).order("fecha", { ascending: false });
+    setReconocimientos(data ?? []);
+    setLoadingRec(false);
+  }
+
+  async function guardarReconocimiento(e: React.FormEvent) {
+    e.preventDefault();
+    if (!escuelaId) return;
+
+    // Verificar que no exista ya ese tipo publicado
+    const existente = reconocimientos.find((r) => r.tipo === formRec.tipo && r.publicado);
+    if (existente) {
+      setRecMsg({ tipo: "err", texto: `Ya existe un logro "${TIPOS_RECONOCIMIENTO.find(t => t.value === formRec.tipo)?.label}" publicado. Ocultá el anterior primero.` });
+      setTimeout(() => setRecMsg(null), 5000);
+      return;
+    }
+
+    setSavingRec(true); setRecMsg(null);
+    try {
+      let imagen_url: string | null = null;
+
+      // Subir imagen si existe
+      if (recFile) {
+        const ext = recFile.name.split(".").pop();
+        const filename = `${escuelaId}/orgullo/${Date.now()}.${ext}`;
+        const { error: storageError } = await supabase.storage
+          .from("aula-verde-media").upload(filename, recFile, { cacheControl: "3600", upsert: false });
+        if (!storageError) {
+          const { data: urlData } = supabase.storage.from("aula-verde-media").getPublicUrl(filename);
+          imagen_url = urlData.publicUrl;
+        }
+      }
+
+      const { error } = await supabase.from("reconocimientos").insert({
+        escuela_id: escuelaId,
+        tipo: formRec.tipo,
+        titulo: formRec.titulo,
+        descripcion: formRec.descripcion || null,
+        imagen_url,
+        fecha: formRec.fecha,
+        publicado: true,
+      });
+      if (error) throw error;
+
+      setRecMsg({ tipo: "ok", texto: "¡Reconocimiento publicado exitosamente!" });
+      setFormRec({ tipo: "promedio", titulo: "", descripcion: "", fecha: new Date().toISOString().split("T")[0] });
+      setRecFile(null);
+      if (recFileRef.current) recFileRef.current.value = "";
+      setShowFormRec(false);
+      cargarReconocimientos();
+    } catch {
+      setRecMsg({ tipo: "err", texto: "Error al guardar el reconocimiento." });
+    } finally {
+      setSavingRec(false);
+      setTimeout(() => setRecMsg(null), 4000);
+    }
+  }
+
+  async function eliminarReconocimiento(id: string) {
+    if (!confirm("¿Eliminar este reconocimiento?")) return;
+    await supabase.from("reconocimientos").delete().eq("id", id);
+    cargarReconocimientos();
+  }
+
+  async function togglePublicadoRec(rec: Reconocimiento) {
+    await supabase.from("reconocimientos").update({ publicado: !rec.publicado }).eq("id", rec.id);
+    cargarReconocimientos();
+  }
 
   // ── ESTUDIANTES DESTACADOS ──
   async function cargarDestacados() {
@@ -347,6 +447,7 @@ export default function AdminPanel() {
     { id: "comunicados", label: "Comunicados", icon: <Megaphone size={18} />,    disabled: false },
     { id: "eventos",     label: "Eventos",     icon: <CalendarDays size={18} />,  disabled: false },
     { id: "destacados",  label: "Destacados",  icon: <Trophy size={18} />,        disabled: false },
+    { id: "orgullo",     label: "Orgullo",     icon: <Star size={18} />,          disabled: false },
     { id: "familias",    label: "Familias",    icon: <Users size={18} />,         disabled: false },
   ];
 
@@ -396,6 +497,7 @@ export default function AdminPanel() {
             {modulo === "comunicados" && "Comunicados"}
             {modulo === "eventos" && "Gestión de Eventos"}
             {modulo === "destacados" && "Estudiantes Destacados"}
+            {modulo === "orgullo" && "Orgullo Inglaterra"}
             {modulo === "familias" && "Familias Registradas"}
           </h1>
           <a href="/" target="_blank" className="ml-auto text-xs text-blue-600 hover:underline">Ver sitio →</a>
@@ -723,6 +825,130 @@ export default function AdminPanel() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── ORGULLO INGLATERRA ── */}
+        {modulo === "orgullo" && (
+          <div className="flex-1 p-4 sm:p-6 space-y-6">
+            <div className="flex justify-end">
+              <button onClick={() => setShowFormRec(!showFormRec)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{ background: "var(--color-ei-electric)" }}>
+                {showFormRec ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Nuevo reconocimiento</>}
+              </button>
+            </div>
+
+            {recMsg && (
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${recMsg.tipo === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {recMsg.tipo === "ok" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}{recMsg.texto}
+              </div>
+            )}
+
+            {showFormRec && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h2 className="font-bold text-gray-800 text-base mb-5" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                  Nuevo reconocimiento — Orgullo Inglaterra
+                </h2>
+                <form onSubmit={guardarReconocimiento} className="space-y-4">
+                  {/* Tipo de logro — selector único */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de logro *</label>
+                    <select required value={formRec.tipo} onChange={(e) => setFormRec({ ...formRec, tipo: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {TIPOS_RECONOCIMIENTO.map((t) => {
+                        const yaPublicado = reconocimientos.some((r) => r.tipo === t.value && r.publicado);
+                        return (
+                          <option key={t.value} value={t.value} disabled={yaPublicado}>
+                            {t.label}{yaPublicado ? " (ya publicado)" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="text-gray-400 text-xs mt-1">Solo puede haber un reconocimiento activo por tipo.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+                    <input type="text" required value={formRec.titulo} onChange={(e) => setFormRec({ ...formRec, titulo: e.target.value })}
+                      placeholder="Ej: Campeones del torneo interescolar"
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                      <textarea rows={3} value={formRec.descripcion} onChange={(e) => setFormRec({ ...formRec, descripcion: e.target.value })}
+                        placeholder="Descripción del logro..."
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+                      <input type="date" value={formRec.fecha} onChange={(e) => setFormRec({ ...formRec, fecha: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Foto del logro</label>
+                      <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-all"
+                        onClick={() => recFileRef.current?.click()}>
+                        {recFile ? (
+                          <p className="text-sm text-green-600 font-medium">✓ {recFile.name}</p>
+                        ) : (
+                          <p className="text-xs text-gray-400">Clic para seleccionar imagen</p>
+                        )}
+                      </div>
+                      <input ref={recFileRef} type="file" accept="image/*" className="hidden"
+                        onChange={(e) => setRecFile(e.target.files?.[0] ?? null)} />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={savingRec} className="btn-inst flex items-center gap-2 disabled:opacity-60">
+                    {savingRec ? <><Loader2 size={16} className="animate-spin" /> Publicando...</> : <><CheckCircle size={16} /> Publicar reconocimiento</>}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-gray-800 text-base mb-2" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                Reconocimientos activos ({reconocimientos.length})
+              </h2>
+              <p className="text-gray-400 text-xs mb-5">Estos aparecen en la sección "Orgullo Inglaterra" del sitio.</p>
+
+              {loadingRec ? <div className="flex justify-center py-10"><Loader2 size={28} className="text-gray-300 animate-spin" /></div>
+              : reconocimientos.length === 0 ? <p className="text-center text-gray-400 text-sm py-10">No hay reconocimientos. ¡Creá el primero!</p>
+              : (
+                <div className="space-y-3">
+                  {reconocimientos.map((rec) => {
+                    const tipoInfo = TIPOS_RECONOCIMIENTO.find((t) => t.value === rec.tipo);
+                    return (
+                      <div key={rec.id} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50">
+                        {rec.imagen_url && (
+                          <img src={rec.imagen_url} alt={rec.titulo} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              {tipoInfo?.label ?? rec.tipo}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rec.publicado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                              {rec.publicado ? "Publicado" : "Oculto"}
+                            </span>
+                          </div>
+                          <h3 className="font-semibold text-gray-800 text-sm">{rec.titulo}</h3>
+                          {rec.descripcion && <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{rec.descripcion}</p>}
+                          <p className="text-gray-300 text-xs mt-0.5">{rec.fecha}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button onClick={() => togglePublicadoRec(rec)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">
+                            {rec.publicado ? "Ocultar" : "Publicar"}
+                          </button>
+                          <button onClick={() => eliminarReconocimiento(rec.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

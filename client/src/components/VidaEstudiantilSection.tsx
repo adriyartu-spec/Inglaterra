@@ -1,17 +1,11 @@
 /* =============================================================
-   VIDA ESTUDIANTIL SECTION – Actividades y logros estudiantiles
+   VIDA ESTUDIANTIL SECTION
    CAMBIOS:
-   - Sección "Orgullo Inglaterra" conectada a Supabase:
-     · Primeros promedios → tabla estudiantes_destacados (lugar=1)
-     · Logro deportivo → galeria_fotos categoria Deportes
-     · Logro artístico → galeria_fotos categoria Arte
-     · Proyecto sobresaliente → galeria_fotos categoria Académico
-     · Acción solidaria → comunicados tipo logro
-     · Momentos memorables → scroll a sección galería
-   - Cada tarjeta es clickeable y navega a su sección
-   - Imagen de fondo real en tarjetas con foto
+   - Orgullo Inglaterra lee de tabla reconocimientos en Supabase
+   - Cada tarjeta muestra datos reales del reconocimiento activo
+   - Tarjetas clickeables navegan a su sección
    - Loading skeleton mientras carga
-   - Full responsive: 1 col mobile / 2 col tablet / 4 col desktop
+   - Full responsive
    ============================================================= */
 
 import { useState, useEffect } from "react";
@@ -30,21 +24,22 @@ const areas = [
   { icon: <Users size={28} />, title: "Extracurriculares", desc: "Clubes, talleres y actividades complementarias que enriquecen la experiencia educativa más allá del aula.", color: "oklch(0.50 0.12 300)" },
 ];
 
-interface OrgulloData {
-  promedioNombre: string | null;
-  promedioGrado: string | null;
-  deporteCaption: string | null;
-  deporteUrl: string | null;
-  arteCaption: string | null;
-  arteUrl: string | null;
-  proyectoCaption: string | null;
-  proyectoUrl: string | null;
-  logroCaption: string | null;
+interface Reconocimiento {
+  tipo: string; titulo: string; descripcion: string | null; imagen_url: string | null;
 }
+
+const TARJETAS_CONFIG = [
+  { tipo: "promedio",  icon: "🌟", label: "Primeros promedios del semestre", seccion: "#estudiantes-destacados" },
+  { tipo: "proyecto",  icon: "🔬", label: "Proyecto sobresaliente",          seccion: "#esta-semana" },
+  { tipo: "deportivo", icon: "🏆", label: "Logro deportivo",                 seccion: "#esta-semana" },
+  { tipo: "artistico", icon: "🎨", label: "Logro artístico",                 seccion: "#esta-semana" },
+  { tipo: "solidario", icon: "🤝", label: "Acción solidaria",                seccion: "#comunicados" },
+  { tipo: "memorable", icon: "📸", label: "Momento memorable",               seccion: "#esta-semana" },
+];
 
 export default function VidaEstudiantilSection() {
   const { ref, visible } = useReveal(0.08);
-  const [orgullo, setOrgullo] = useState<OrgulloData | null>(null);
+  const [reconocimientos, setReconocimientos] = useState<Record<string, Reconocimiento>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,37 +48,20 @@ export default function VidaEstudiantilSection() {
         const { data: escuela } = await supabase
           .from("escuelas").select("id").eq("subdominio", "inglaterra").single();
         if (!escuela) return;
-        const eid = escuela.id;
 
-        const [destRes, deporteRes, arteRes, proyectoRes, logroRes] = await Promise.all([
-          supabase.from("estudiantes_destacados")
-            .select("nombre, grado").eq("escuela_id", eid).eq("publicado", true).eq("lugar", 1)
-            .order("semestre", { ascending: false }).limit(1).single(),
-          supabase.from("galeria_fotos")
-            .select("caption, url").eq("escuela_id", eid).eq("publicada", true).eq("categoria", "Deportes")
-            .order("created_at", { ascending: false }).limit(1).single(),
-          supabase.from("galeria_fotos")
-            .select("caption, url").eq("escuela_id", eid).eq("publicada", true).eq("categoria", "Arte")
-            .order("created_at", { ascending: false }).limit(1).single(),
-          supabase.from("galeria_fotos")
-            .select("caption, url").eq("escuela_id", eid).eq("publicada", true).eq("categoria", "Académico")
-            .order("created_at", { ascending: false }).limit(1).single(),
-          supabase.from("comunicados")
-            .select("titulo").eq("escuela_id", eid).eq("publicado", true).eq("tipo", "logro")
-            .order("fecha_publicacion", { ascending: false }).limit(1).single(),
-        ]);
+        const { data } = await supabase
+          .from("reconocimientos")
+          .select("tipo, titulo, descripcion, imagen_url")
+          .eq("escuela_id", escuela.id)
+          .eq("publicado", true)
+          .order("fecha", { ascending: false });
 
-        setOrgullo({
-          promedioNombre: destRes.data?.nombre ?? null,
-          promedioGrado:  destRes.data?.grado ?? null,
-          deporteCaption: deporteRes.data?.caption ?? null,
-          deporteUrl:     deporteRes.data?.url ?? null,
-          arteCaption:    arteRes.data?.caption ?? null,
-          arteUrl:        arteRes.data?.url ?? null,
-          proyectoCaption: proyectoRes.data?.caption ?? null,
-          proyectoUrl:    proyectoRes.data?.url ?? null,
-          logroCaption:   logroRes.data?.titulo ?? null,
-        });
+        if (data) {
+          // Un reconocimiento por tipo — el más reciente
+          const mapa: Record<string, Reconocimiento> = {};
+          data.forEach((r) => { if (!mapa[r.tipo]) mapa[r.tipo] = r; });
+          setReconocimientos(mapa);
+        }
       } catch { /* silently fail */ }
       finally { setLoading(false); }
     }
@@ -92,48 +70,13 @@ export default function VidaEstudiantilSection() {
 
   const scrollTo = (id: string) => document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
 
-  const tarjetas = [
-    {
-      icon: "🌟", label: "Primeros promedios del semestre",
-      detalle: orgullo?.promedioNombre ? `${orgullo.promedioNombre} · ${orgullo.promedioGrado} grado` : null,
-      imagen: null, onClick: () => scrollTo("#estudiantes-destacados"),
-    },
-    {
-      icon: "🔬", label: "Proyecto sobresaliente",
-      detalle: orgullo?.proyectoCaption ?? null,
-      imagen: orgullo?.proyectoUrl ?? null, onClick: () => scrollTo("#esta-semana"),
-    },
-    {
-      icon: "🏆", label: "Logro deportivo",
-      detalle: orgullo?.deporteCaption ?? null,
-      imagen: orgullo?.deporteUrl ?? null, onClick: () => scrollTo("#esta-semana"),
-    },
-    {
-      icon: "🎨", label: "Logro artístico",
-      detalle: orgullo?.arteCaption ?? null,
-      imagen: orgullo?.arteUrl ?? null, onClick: () => scrollTo("#esta-semana"),
-    },
-    {
-      icon: "🤝", label: "Acción solidaria",
-      detalle: orgullo?.logroCaption ?? null,
-      imagen: null, onClick: () => scrollTo("#comunicados"),
-    },
-    {
-      icon: "📸", label: "Momentos memorables",
-      detalle: "Ver galería completa",
-      imagen: null, onClick: () => scrollTo("#esta-semana"),
-    },
-  ];
-
   return (
     <section id="vida-estudiantil" className="py-16 sm:py-20 lg:py-28 bg-[oklch(0.97_0.005_255)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Encabezado */}
         <div ref={ref} className={`mb-12 lg:mb-16 reveal ${visible ? "visible" : ""}`}>
-          <p className="text-[oklch(0.72_0.12_75)] font-semibold text-sm uppercase tracking-widest mb-3">
-            Más allá del aula
-          </p>
+          <p className="text-[oklch(0.72_0.12_75)] font-semibold text-sm uppercase tracking-widest mb-3">Más allá del aula</p>
           <h2 className="text-[oklch(0.22_0.07_255)] text-3xl sm:text-4xl lg:text-5xl font-bold gold-underline"
             style={{ fontFamily: "'DM Serif Display', serif" }}>
             Vida Estudiantil
@@ -165,7 +108,6 @@ export default function VidaEstudiantilSection() {
           style={{ transitionDelay: "600ms" }}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
-            {/* Texto */}
             <div>
               <div className="inline-flex items-center gap-2 bg-[oklch(0.72_0.12_75/0.2)] border border-[oklch(0.72_0.12_75/0.4)] text-[oklch(0.85_0.09_75)] px-3 py-1.5 rounded-full text-sm font-medium mb-4">
                 <Star size={14} /> Reconocimientos
@@ -183,33 +125,36 @@ export default function VidaEstudiantilSection() {
               )}
             </div>
 
-            {/* Tarjetas clickeables con datos reales */}
+            {/* Tarjetas con datos reales de Supabase */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {tarjetas.map((item) => (
-                <button key={item.label} onClick={item.onClick}
-                  className="group relative bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 sm:p-4 text-left transition-all duration-200 hover:-translate-y-0.5 overflow-hidden min-h-[100px]">
-                  {/* Imagen de fondo real si existe */}
-                  {item.imagen && (
-                    <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity">
-                      <img src={item.imagen} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <div className="relative z-10">
-                    <div className="text-xl sm:text-2xl mb-1.5">{item.icon}</div>
-                    <p className="text-white/90 text-xs font-semibold leading-tight mb-1">{item.label}</p>
-                    {item.detalle ? (
-                      <p className="text-white/60 text-xs leading-snug line-clamp-2">{item.detalle}</p>
-                    ) : loading ? (
-                      <div className="h-2.5 w-16 bg-white/10 rounded animate-pulse mt-1" />
-                    ) : (
-                      <p className="text-white/30 text-xs italic">Por publicar</p>
+              {TARJETAS_CONFIG.map((config) => {
+                const rec = reconocimientos[config.tipo];
+                return (
+                  <button key={config.tipo} onClick={() => scrollTo(config.seccion)}
+                    className="group relative bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 sm:p-4 text-left transition-all duration-200 hover:-translate-y-0.5 overflow-hidden min-h-[100px]">
+                    {/* Imagen de fondo real */}
+                    {rec?.imagen_url && (
+                      <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity">
+                        <img src={rec.imagen_url} alt="" className="w-full h-full object-cover" />
+                      </div>
                     )}
-                    <div className="flex items-center gap-1 mt-2 text-white/40 group-hover:text-white/70 transition-colors">
-                      <ArrowRight size={10} /><span className="text-xs">Ver más</span>
+                    <div className="relative z-10">
+                      <div className="text-xl sm:text-2xl mb-1.5">{config.icon}</div>
+                      <p className="text-white/90 text-xs font-semibold leading-tight mb-1">{config.label}</p>
+                      {rec ? (
+                        <p className="text-white/70 text-xs leading-snug line-clamp-2 font-medium">{rec.titulo}</p>
+                      ) : loading ? (
+                        <div className="h-2.5 w-16 bg-white/10 rounded animate-pulse mt-1" />
+                      ) : (
+                        <p className="text-white/30 text-xs italic">Por publicar</p>
+                      )}
+                      <div className="flex items-center gap-1 mt-2 text-white/40 group-hover:text-white/70 transition-colors">
+                        <ArrowRight size={10} /><span className="text-xs">Ver más</span>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
