@@ -197,7 +197,7 @@ export default function AdminPanel() {
   }, [usuario]);
 
   useEffect(() => {
-    if (!escuelaId || !sessionToken) return;
+    if (!escuelaId) return;
     if (modulo === "galeria") cargarFotos();
     if (modulo === "comunicados") cargarComunicados();
     if (modulo === "eventos") cargarEventos();
