@@ -206,7 +206,7 @@ export default function AdminPanel() {
     if (modulo === "orgullo") cargarReconocimientos();
     if (modulo === "usuarios") cargarUsuarios();
     if (modulo === "votaciones") cargarConcursos();
-  }, [escuelaId, modulo, sessionToken]);
+  }, [escuelaId, modulo ]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
@@ -214,6 +214,7 @@ export default function AdminPanel() {
 
   // ── VOTACIONES ──
   async function cargarConcursos() {
+    if (!escuelaId) return;
     setLoadingConcursos(true);
     const { data } = await supabase.from("concursos_votacion")
       .select("*, opciones:opciones_votacion(*)")
