@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import {
   Images, CalendarDays, Megaphone, LogOut, Upload,
-  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X, Users, Trophy
+  Trash2, Star, StarOff, Loader2, CheckCircle, AlertCircle, Plus, X, Users, Trophy, Vote, BarChart3, Eye, EyeOff
 } from "lucide-react";
 
 interface Foto {
@@ -45,7 +45,20 @@ interface Reconocimiento {
 
 interface Usuario {
   id: string; email: string; created_at: string;
-  last_sign_in_at: string | null;
+  last_sign_in_at: string | null; user_metadata?: { rol?: string };
+}
+
+interface Concurso {
+  id: string; titulo: string; descripcion: string | null;
+  tipo_acceso: string; fecha_inicio: string; fecha_cierre: string;
+  activo: boolean; publicado: boolean; created_at: string;
+  opciones?: OpcionVoto[];
+}
+
+interface OpcionVoto {
+  id: string; concurso_id: string; titulo: string;
+  descripcion: string | null; imagen_url: string | null; orden: number;
+  _count?: number;
 }
 
 const CATEGORIAS_FOTO = ["General", "Académico", "Deportes", "Arte", "Cultural", "Institucional"];
@@ -133,6 +146,28 @@ export default function AdminPanel() {
   const [filtroPadres, setFiltroPadres] = useState<"todos" | "pendientes" | "aprobados">("pendientes");
   const [padresMsg, setPadresMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
 
+  // Votaciones
+  const [concursos, setConcursos] = useState<Concurso[]>([]);
+  const [loadingConcursos, setLoadingConcursos] = useState(false);
+  const [showFormConcurso, setShowFormConcurso] = useState(false);
+  const [savingConcurso, setSavingConcurso] = useState(false);
+  const [concursoMsg, setConcursoMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [concursoActivo, setConcursoActivo] = useState<Concurso | null>(null);
+  const [showOpciones, setShowOpciones] = useState(false);
+  const [formConcurso, setFormConcurso] = useState({
+    titulo: "Concurso Uniforme 2027",
+    descripcion: "",
+    tipo_acceso: "padres",
+    fecha_inicio: new Date().toISOString().split("T")[0],
+    fecha_cierre: "",
+  });
+  const [formOpcion, setFormOpcion] = useState({ titulo: "", descripcion: "" });
+  const [opcionFile, setOpcionFile] = useState<File | null>(null);
+  const opcionFileRef = useRef<HTMLInputElement>(null);
+  const [savingOpcion, setSavingOpcion] = useState(false);
+  const [resultados, setResultados] = useState<OpcionVoto[]>([]);
+  const [showResultados, setShowResultados] = useState(false);
+
   // Usuarios del panel
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
@@ -170,11 +205,121 @@ export default function AdminPanel() {
     if (modulo === "destacados") cargarDestacados();
     if (modulo === "orgullo") cargarReconocimientos();
     if (modulo === "usuarios") cargarUsuarios();
+    if (modulo === "votaciones") cargarConcursos();
   }, [escuelaId, modulo, sessionToken]);
 
   useEffect(() => {
     if (escuelaId && modulo === "familias") cargarPadres();
   }, [filtroPadres]);
+
+  // ── VOTACIONES ──
+  async function cargarConcursos() {
+    setLoadingConcursos(true);
+    const { data } = await supabase.from("concursos_votacion")
+      .select("*, opciones:opciones_votacion(*)")
+      .eq("escuela_id", escuelaId)
+      .order("created_at", { ascending: false });
+    setConcursos(data ?? []);
+    setLoadingConcursos(false);
+  }
+
+  async function guardarConcurso(e: React.FormEvent) {
+    e.preventDefault();
+    if (!escuelaId) return;
+    setSavingConcurso(true); setConcursoMsg(null);
+    try {
+      const { data, error } = await supabase.from("concursos_votacion").insert({
+        escuela_id: escuelaId,
+        titulo: formConcurso.titulo,
+        descripcion: formConcurso.descripcion || null,
+        tipo_acceso: formConcurso.tipo_acceso,
+        fecha_inicio: formConcurso.fecha_inicio,
+        fecha_cierre: formConcurso.fecha_cierre,
+        activo: false,
+        publicado: false,
+      }).select().single();
+      if (error) throw error;
+      setConcursoMsg({ tipo: "ok", texto: "¡Concurso creado! Ahora agregá los diseños." });
+      setFormConcurso({ titulo: "Concurso Uniforme 2027", descripcion: "", tipo_acceso: "padres", fecha_inicio: new Date().toISOString().split("T")[0], fecha_cierre: "" });
+      setShowFormConcurso(false);
+      setConcursoActivo(data);
+      setShowOpciones(true);
+      cargarConcursos();
+    } catch (err: any) {
+      setConcursoMsg({ tipo: "err", texto: err.message ?? "Error al crear concurso." });
+    } finally {
+      setSavingConcurso(false);
+      setTimeout(() => setConcursoMsg(null), 5000);
+    }
+  }
+
+  async function toggleConcurso(concurso: Concurso, campo: "activo" | "publicado") {
+    await supabase.from("concursos_votacion").update({ [campo]: !concurso[campo] }).eq("id", concurso.id);
+    cargarConcursos();
+  }
+
+  async function eliminarConcurso(id: string) {
+    if (!confirm("¿Eliminar este concurso y todos sus votos?")) return;
+    await supabase.from("votos").delete().eq("concurso_id", id);
+    await supabase.from("opciones_votacion").delete().eq("concurso_id", id);
+    await supabase.from("concursos_votacion").delete().eq("id", id);
+    setConcursoActivo(null);
+    cargarConcursos();
+  }
+
+  async function agregarOpcion(e: React.FormEvent) {
+    e.preventDefault();
+    if (!concursoActivo || !escuelaId) return;
+    setSavingOpcion(true);
+    try {
+      let imagen_url: string | null = null;
+      if (opcionFile) {
+        const ext = opcionFile.name.split(".").pop();
+        const filename = `${escuelaId}/concursos/${concursoActivo.id}/${Date.now()}.${ext}`;
+        const { error: storageError } = await supabase.storage
+          .from("aula-verde-media").upload(filename, opcionFile, { cacheControl: "3600", upsert: false });
+        if (!storageError) {
+          const { data: urlData } = supabase.storage.from("aula-verde-media").getPublicUrl(filename);
+          imagen_url = urlData.publicUrl;
+        }
+      }
+      const { error } = await supabase.from("opciones_votacion").insert({
+        escuela_id: escuelaId,
+        concurso_id: concursoActivo.id,
+        titulo: formOpcion.titulo,
+        descripcion: formOpcion.descripcion || null,
+        imagen_url,
+        orden: (concursoActivo.opciones?.length ?? 0) + 1,
+      });
+      if (error) throw error;
+      setFormOpcion({ titulo: "", descripcion: "" });
+      setOpcionFile(null);
+      if (opcionFileRef.current) opcionFileRef.current.value = "";
+      cargarConcursos();
+    } catch { /* silently fail */ }
+    finally { setSavingOpcion(false); }
+  }
+
+  async function eliminarOpcion(opcionId: string) {
+    if (!confirm("¿Eliminar este diseño?")) return;
+    await supabase.from("opciones_votacion").delete().eq("id", opcionId);
+    cargarConcursos();
+  }
+
+  async function cargarResultados(concursoId: string) {
+    const { data: opciones } = await supabase.from("opciones_votacion")
+      .select("*").eq("concurso_id", concursoId).order("orden");
+    const { data: votos } = await supabase.from("votos")
+      .select("opcion_id").eq("concurso_id", concursoId);
+    if (opciones && votos) {
+      const conteo = opciones.map((op) => ({
+        ...op,
+        _count: votos.filter((v) => v.opcion_id === op.id).length,
+      }));
+      setResultados(conteo.sort((a, b) => b._count - a._count));
+    }
+    setShowResultados(true);
+  }
 
   // ── USUARIOS DEL PANEL ──
   async function cargarUsuarios() {
@@ -541,6 +686,7 @@ export default function AdminPanel() {
     { id: "destacados",  label: "Destacados",  icon: <Trophy size={18} />,        disabled: false },
     { id: "orgullo",     label: "Orgullo",     icon: <Star size={18} />,          disabled: false },
     { id: "familias",    label: "Familias",    icon: <Users size={18} />,         disabled: false },
+    { id: "votaciones",  label: "Votaciones",  icon: <Vote size={18} />,          disabled: false },
     { id: "usuarios",    label: "Usuarios",    icon: <Users size={18} />,         disabled: false },
   ];
 
@@ -592,6 +738,7 @@ export default function AdminPanel() {
             {modulo === "destacados" && "Estudiantes Destacados"}
             {modulo === "orgullo" && "Orgullo Inglaterra"}
             {modulo === "familias" && "Familias Registradas"}
+            {modulo === "votaciones" && "Gestión de Votaciones"}
             {modulo === "usuarios" && "Usuarios del Panel"}
           </h1>
           <a href="/" target="_blank" className="ml-auto text-xs text-blue-600 hover:underline">Ver sitio →</a>

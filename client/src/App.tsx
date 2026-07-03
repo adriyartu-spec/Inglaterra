@@ -12,6 +12,8 @@ import Home from "./pages/Home";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import RegistroPadres from "./pages/RegistroPadres";
+import VotacionPage from "./pages/VotacionPage";
+
 
 function Router() {
   return (
@@ -20,6 +22,7 @@ function Router() {
       <Route path={"/admin"} component={AdminPanel} />
       <Route path={"/admin/login"} component={AdminLogin} />
       <Route path={"/registro"} component={RegistroPadres} />
+      <Route path={"/voto"} component={VotacionPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
