@@ -168,25 +168,6 @@ export default function AdminPanel() {
   const [resultados, setResultados] = useState<OpcionVoto[]>([]);
   const [showResultados, setShowResultados] = useState(false);
 
-  // Votaciones
-  const [concursos, setConcursos] = useState<Concurso[]>([]);
-  const [loadingConcursos, setLoadingConcursos] = useState(false);
-  const [showFormConcurso, setShowFormConcurso] = useState(false);
-  const [savingConcurso, setSavingConcurso] = useState(false);
-  const [concursoMsg, setConcursoMsg] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
-  const [concursoActivo, setConcursoActivo] = useState<Concurso | null>(null);
-  const [showOpciones, setShowOpciones] = useState(false);
-  const [formConcurso, setFormConcurso] = useState({
-    titulo: "Concurso Uniforme 2027", descripcion: "", tipo_acceso: "padres",
-    fecha_inicio: new Date().toISOString().split("T")[0], fecha_cierre: "",
-  });
-  const [formOpcion, setFormOpcion] = useState({ titulo: "", descripcion: "" });
-  const [opcionFile, setOpcionFile] = useState<File | null>(null);
-  const opcionFileRef = useRef<HTMLInputElement>(null);
-  const [savingOpcion, setSavingOpcion] = useState(false);
-  const [resultados, setResultados] = useState<OpcionVoto[]>([]);
-  const [showResultados, setShowResultados] = useState(false);
-
   // Usuarios del panel
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
