@@ -90,7 +90,7 @@ export default function HeroSection() {
         <img
           src="/Frente.png"
           alt=""
-          className="w-full h-[115%] object-cover object-right-top"
+          className="w-full h-[115%] object-cover object-center"
           style={{
             transform: `translateY(${parallaxOffset}px)`,
             willChange: "transform",
