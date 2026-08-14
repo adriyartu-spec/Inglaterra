@@ -90,7 +90,7 @@ export default function HeroSection() {
         <img
           src="/Frente.png"
           alt=""
-          className="w-full h-[115%] object-cover object-[center_20%]"
+          className="w-full h-[115%] object-cover object-right-top"
           style={{
             transform: `translateY(${parallaxOffset}px)`,
             willChange: "transform",
@@ -98,14 +98,6 @@ export default function HeroSection() {
           }}
         />
         {/* Gradiente inferior para transición suave a la siguiente sección */}
-{/* Overlay izquierdo para legibilidad del texto */}
-	<div
-  	className="absolute inset-0"
-  	style={{
-    	  background: "linear-gradient(to right, rgba(10,15,40,0.80) 0%, rgba(10,15,40,0.50) 50%, rgba(10,15,40,0.00) 100%)",
-  		  }}
-		/>
-        <div
           className="absolute bottom-0 left-0 right-0 h-32"
           style={{
             background: "linear-gradient(to bottom, transparent, var(--color-ei-navy-dark))",
